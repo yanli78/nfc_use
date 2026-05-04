@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:nfc_use/shared/card/index.dart';
+import 'package:nfc_use/pages/Home/index.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -14,13 +14,10 @@ class _MainPageState extends State<MainPage> {
   final PageController _pageController = PageController();
 
   final List<Widget> _pages = [
-    Container(
-      color: Colors.red,
-      child: const Center(child: Text("首页")),
-    ),
+    HomePage(),
     Container(
       color: Colors.yellow,
-      child: const Center(child: Text("我的")),
+      child: const Center(child: Text("设置")),
     ),
   ];
 
@@ -61,7 +58,7 @@ class _MainPageState extends State<MainPage> {
         unselectedItemColor: Colors.grey,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: '首页'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: '我的'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: '设置'),
         ],
       ),
     );
