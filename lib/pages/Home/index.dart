@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:nfc_use/core/constants/CardItem.dart';
+import 'package:nfc_use/pages/Cards/card_use.dart';
 import 'package:nfc_use/shared/card/index.dart';
 
 class HomePage extends StatefulWidget {
@@ -13,39 +15,46 @@ class _HomePageState extends State<HomePage> {
     viewportFraction: 0.8,
     initialPage: 0,
   );
-
   int _currentPage = 0;
 
-  // 示例卡片数据
-  final List<Map<String, dynamic>> _cardData = [
-    {
-      'title': '探索宇宙',
-      'subtitle': '仰望星空，探索未知的奥秘',
-      'color': const Color(0xFF667eea),
-      'image':
+  // 示例数据
+  final List<CardItem> _cardItems = [
+    CardItem(
+      title: '探索宇宙',
+      subtitle: '仰望星空，探索未知的奥秘',
+      description:
+          '宇宙是一个充满神秘和未知的地方。从最小的原子到最大的星系，宇宙中的一切都遵循着物理定律运行。人类对宇宙的探索从未停止，从伽利略的望远镜到现代的太空探测器，我们正在一步步揭开宇宙的神秘面纱。',
+      color: const Color(0xFF667eea),
+      imageUrl:
           'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80',
-    },
-    {
-      'title': '城市夜景',
-      'subtitle': '霓虹灯下的都市生活',
-      'color': const Color(0xFFf093fb),
-      'image':
+    ),
+    CardItem(
+      title: '城市夜景',
+      subtitle: '霓虹灯下的都市生活',
+      description:
+          '当夜幕降临，城市便换上了另一副面孔。霓虹灯闪烁，车水马龙，高楼大厦的灯光构成了一幅美丽的画卷。城市的夜晚充满了活力和机遇，每一盏灯背后都有一个故事。',
+      color: const Color(0xFFf093fb),
+      imageUrl:
           'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&q=80',
-    },
-    {
-      'title': '自然风光',
-      'subtitle': '远离喧嚣，回归自然',
-      'color': const Color(0xFF4facfe),
-      'image':
+    ),
+    CardItem(
+      title: '自然风光',
+      subtitle: '远离喧嚣，回归自然',
+      description:
+          '大自然是最伟大的艺术家。从雄伟的山川到宁静的湖泊，从茂密的森林到广阔的草原，自然的美景总是让人心旷神怡。走进大自然，感受生命的力量，让心灵得到净化。',
+      color: const Color(0xFF4facfe),
+      imageUrl:
           'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&q=80',
-    },
-    {
-      'title': '科技未来',
-      'subtitle': '创新科技，引领未来',
-      'color': const Color(0xFF43e97b),
-      'image':
+    ),
+    CardItem(
+      title: '科技未来',
+      subtitle: '创新科技，引领未来',
+      description:
+          '科技正在改变我们的生活。人工智能、量子计算、太空探索、生物技术...每一项创新都在推动人类社会向前发展。未来已来，让我们一起见证科技带来的无限可能。',
+      color: const Color(0xFF43e97b),
+      imageUrl:
           'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&q=80',
-    },
+    ),
   ];
 
   @override
@@ -54,20 +63,30 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // 核心：卡片滑动触发的功能
-  void _onCardTriggered(int index) {
-    final item = _cardData[index];
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('已触发：${item['title']}'),
-        content: Text('这里可以打开详情页、跳转页面或执行其他操作。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('确定'),
-          ),
-        ],
+  // 核心：打开详情页
+  void _openDetailPage(CardItem item) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            CardDetailScreen(item: item),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          // 自定义页面切换动画：从下方淡入
+          const begin = Offset(0.0, 1.0);
+          const end = Offset.zero;
+          const curve = Curves.easeInOut;
+
+          var tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curve));
+          var offsetAnimation = animation.drive(tween);
+
+          return SlideTransition(
+            position: offsetAnimation,
+            child: FadeTransition(opacity: animation, child: child),
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 400),
       ),
     );
   }
@@ -80,7 +99,6 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. 顶部标题区域
             const Padding(
               padding: EdgeInsets.only(left: 24, top: 40, bottom: 24),
               child: Column(
@@ -96,23 +114,20 @@ class _HomePageState extends State<HomePage> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    '左右滑动切换 · 上滑当前卡片触发功能',
+                    '左右滑动切换 · 上滑当前卡片查看详情',
                     style: TextStyle(fontSize: 14, color: Colors.grey),
                   ),
                 ],
               ),
             ),
 
-            // 2. 中间核心卡片区域
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
-                itemCount: _cardData.length,
-                onPageChanged: (index) {
-                  setState(() => _currentPage = index);
-                },
+                itemCount: _cardItems.length,
+                onPageChanged: (index) => setState(() => _currentPage = index),
                 itemBuilder: (context, index) {
-                  final item = _cardData[index];
+                  final item = _cardItems[index];
 
                   return AnimatedBuilder(
                     animation: _pageController,
@@ -122,36 +137,31 @@ class _HomePageState extends State<HomePage> {
                         value = (_pageController.page! - index);
                         value = (1 - (value.abs() * 0.1)).clamp(0.8, 1.0);
                       }
-
                       return Center(
                         child: SizedBox(
-                          height:
-                              Curves.easeInOut.transform(value) *
-                              380, // 稍微加高一点给滑动留空间
+                          height: Curves.easeInOut.transform(value) * 380,
                           child: child,
                         ),
                       );
                     },
-                    // 核心：使用 GalleryCard
-                    child: GalleryCard(
-                      title: item['title'],
-                      subtitle: item['subtitle'],
-                      color: item['color'],
-                      imageUrl: item['image'],
-                      isActive: _currentPage == index, // 只有当前页的卡片是活跃的
-                      onTrigger: () => _onCardTriggered(index),
+                    child: InteractiveGalleryCard(
+                      title: item.title,
+                      subtitle: item.subtitle,
+                      color: item.color,
+                      imageUrl: item.imageUrl,
+                      isActive: _currentPage == index,
+                      onTrigger: () => _openDetailPage(item),
                     ),
                   );
                 },
               ),
             ),
 
-            // 3. 指示器
             Padding(
               padding: const EdgeInsets.only(top: 20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(_cardData.length, (index) {
+                children: List.generate(_cardItems.length, (index) {
                   return Container(
                     width: _currentPage == index ? 24 : 8,
                     height: 8,
@@ -166,6 +176,7 @@ class _HomePageState extends State<HomePage> {
                 }),
               ),
             ),
+            const SizedBox(height: 40),
           ],
         ),
       ),

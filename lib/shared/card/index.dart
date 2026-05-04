@@ -1,31 +1,30 @@
-// ==========================================
-// 核心：独立的卡片类（后续所有卡片功能都在这里扩展）
-// ==========================================
 import 'package:flutter/material.dart';
+import 'package:nfc_use/core/constants/CardItem.dart';
 
-class GalleryCard extends StatefulWidget {
+class InteractiveGalleryCard extends StatefulWidget {
+  // 注意这里是单独的参数，不是 item
   final String title;
   final String subtitle;
   final Color color;
   final String imageUrl;
-  final VoidCallback? onTrigger; // 滑动触发成功的回调
-  final bool isActive; // 是否为当前活跃卡片（只有活跃卡片能滑动）
+  final VoidCallback? onTrigger;
+  final bool isActive;
 
-  const GalleryCard({
+  const InteractiveGalleryCard({
     super.key,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.imageUrl,
+    required this.title, //  required
+    required this.subtitle, //  required
+    required this.color, //  required
+    required this.imageUrl, //  required
     this.onTrigger,
     this.isActive = false,
   });
 
   @override
-  State<GalleryCard> createState() => _GalleryCardState();
+  State<InteractiveGalleryCard> createState() => _InteractiveGalleryCardState();
 }
 
-class _GalleryCardState extends State<GalleryCard>
+class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     with SingleTickerProviderStateMixin {
   // 动画相关
   late AnimationController _animationController;
