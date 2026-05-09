@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nfc_use/core/constants/CardItem.dart';
-import 'package:nfc_use/pages/Cards/card_use.dart';
-import 'package:nfc_use/shared/card/index.dart';
+import 'package:nfc_use/pages/Home/card_use.dart';
+import 'package:nfc_use/pages/Home/card.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -16,6 +16,10 @@ class _HomePageState extends State<HomePage> {
     initialPage: 0,
   );
   int _currentPage = 0;
+  // 当前卡片的重置函数引用
+  Function? _currentResetCard;
+  // 保存每个卡片的 Key
+  final List<GlobalKey> _cardKeys = [];
 
   // 示例数据
   final List<CardItem> _cardItems = [
@@ -58,35 +62,179 @@ class _HomePageState extends State<HomePage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // 初始化每个卡片的 Key
+    for (int i = 0; i < _cardItems.length; i++) {
+      _cardKeys.add(GlobalKey());
+    }
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
   }
 
-  // 核心：打开详情页
-  void _openDetailPage(CardItem item) {
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            CardDetailScreen(item: item),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          // 自定义页面切换动画：从下方淡入
-          const begin = Offset(0.0, 1.0);
-          const end = Offset.zero;
-          const curve = Curves.easeInOut;
+  // 触发当前卡片的动画并打开详情页
+  void _triggerCurrentCard() {
+    if (_currentPage >= 0 && _currentPage < _cardKeys.length) {
+      InteractiveGalleryCard.triggerAnimation(_cardKeys[_currentPage]);
+    }
+  }
 
-          var tween = Tween(
-            begin: begin,
-            end: end,
-          ).chain(CurveTween(curve: curve));
-          var offsetAnimation = animation.drive(tween);
+  // 核心：打开详情页，等全屏后再重置卡片
+  void _openDetailPage(CardItem item, Function resetCard) {
+    _currentResetCard = resetCard;
+    Navigator.of(context)
+        .push(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                CardDetailScreen(item: item),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  // 自定义页面切换动画：从下方淡入
+                  const begin = Offset(0.0, 1.0);
+                  const end = Offset.zero;
+                  const curve = Curves.easeInOut;
 
-          return SlideTransition(
-            position: offsetAnimation,
-            child: FadeTransition(opacity: animation, child: child),
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 400),
+                  var tween = Tween(
+                    begin: begin,
+                    end: end,
+                  ).chain(CurveTween(curve: curve));
+                  var offsetAnimation = animation.drive(tween);
+
+                  return SlideTransition(
+                    position: offsetAnimation,
+                    child: FadeTransition(opacity: animation, child: child),
+                  );
+                },
+            transitionDuration: const Duration(milliseconds: 400),
+          ),
+        )
+        .then((_) {
+          // 页面返回后重置卡片
+          if (_currentResetCard != null) {
+            _currentResetCard!();
+          }
+        });
+
+    // 等页面动画完成后再重置卡片
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (_currentResetCard != null) {
+        _currentResetCard!();
+      }
+    });
+  }
+
+  Widget _buildHeader() {
+    // 顶部区域 - 添加手势检测
+    return _SimpleSwipeDetector(
+      onSwipeUp: _triggerCurrentCard,
+      child: const Padding(
+        padding: EdgeInsets.only(left: 24, top: 40, bottom: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '精选画廊',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              '左右滑动切换 · 上滑任意位置查看详情',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardList() {
+    // 卡片区域
+    return Expanded(
+      child: Stack(
+        children: [
+          // 底部的透明手势检测层
+          Positioned.fill(
+            child: _SimpleSwipeDetector(
+              onSwipeUp: _triggerCurrentCard,
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          // 前面的 PageView
+          PageView.builder(
+            controller: _pageController,
+            itemCount: _cardItems.length,
+            onPageChanged: (index) => setState(() => _currentPage = index),
+            itemBuilder: (context, index) {
+              final item = _cardItems[index];
+
+              return AnimatedBuilder(
+                animation: _pageController,
+                builder: (context, child) {
+                  double value = 1.0;
+                  if (_pageController.position.haveDimensions) {
+                    value = (_pageController.page! - index);
+                    value = (1 - (value.abs() * 0.1)).clamp(0.8, 1.0);
+                  }
+                  return Center(
+                    child: SizedBox(
+                      height: Curves.easeInOut.transform(value) * 380,
+                      child: child,
+                    ),
+                  );
+                },
+                child: InteractiveGalleryCard(
+                  key: _cardKeys[index],
+                  title: item.title,
+                  subtitle: item.subtitle,
+                  color: item.color,
+                  imageUrl: item.imageUrl,
+                  isActive: _currentPage == index,
+                  onTriggerWithReset: (resetCard) =>
+                      _openDetailPage(item, resetCard),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEnd() {
+    // 底部指示器区域 - 添加手势检测
+    return _SimpleSwipeDetector(
+      onSwipeUp: _triggerCurrentCard,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(_cardItems.length, (index) {
+                return Container(
+                  width: _currentPage == index ? 24 : 8,
+                  height: 8,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    color: _currentPage == index
+                        ? const Color(0xFF00966A)
+                        : Colors.grey[300],
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 40),
+        ],
       ),
     );
   }
@@ -98,88 +246,48 @@ class _HomePageState extends State<HomePage> {
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(left: 24, top: 40, bottom: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '精选画廊',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    '左右滑动切换 · 上滑当前卡片查看详情',
-                    style: TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                itemCount: _cardItems.length,
-                onPageChanged: (index) => setState(() => _currentPage = index),
-                itemBuilder: (context, index) {
-                  final item = _cardItems[index];
-
-                  return AnimatedBuilder(
-                    animation: _pageController,
-                    builder: (context, child) {
-                      double value = 1.0;
-                      if (_pageController.position.haveDimensions) {
-                        value = (_pageController.page! - index);
-                        value = (1 - (value.abs() * 0.1)).clamp(0.8, 1.0);
-                      }
-                      return Center(
-                        child: SizedBox(
-                          height: Curves.easeInOut.transform(value) * 380,
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: InteractiveGalleryCard(
-                      title: item.title,
-                      subtitle: item.subtitle,
-                      color: item.color,
-                      imageUrl: item.imageUrl,
-                      isActive: _currentPage == index,
-                      onTrigger: () => _openDetailPage(item),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.only(top: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(_cardItems.length, (index) {
-                  return Container(
-                    width: _currentPage == index ? 24 : 8,
-                    height: 8,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(4),
-                      color: _currentPage == index
-                          ? const Color(0xFF00966A)
-                          : Colors.grey[300],
-                    ),
-                  );
-                }),
-              ),
-            ),
-            const SizedBox(height: 40),
-          ],
+          children: [_buildHeader(), _buildCardList(), _buildEnd()],
         ),
       ),
+    );
+  }
+}
+
+// 一个简单的手势检测组件
+class _SimpleSwipeDetector extends StatefulWidget {
+  final VoidCallback? onSwipeUp;
+  final Widget child;
+
+  const _SimpleSwipeDetector({required this.child, this.onSwipeUp});
+
+  @override
+  State<_SimpleSwipeDetector> createState() => __SimpleSwipeDetectorState();
+}
+
+class __SimpleSwipeDetectorState extends State<_SimpleSwipeDetector> {
+  Offset? _dragStartPosition;
+  static const double _minSwipeDistance = 80;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragStart: (details) {
+        _dragStartPosition = details.localPosition;
+      },
+      onVerticalDragEnd: (details) {
+        if (_dragStartPosition == null) return;
+
+        // 如果是向上滑动并且距离足够
+        if (details.primaryVelocity != null &&
+            details.primaryVelocity! < 0 &&
+            details.primaryVelocity!.abs() > 50) {
+          if (widget.onSwipeUp != null) {
+            widget.onSwipeUp!();
+          }
+        }
+      },
+      child: widget.child,
     );
   }
 }
