@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:nfc_use/pages/Home/index.dart';
+import 'package:nfc_use/pages/Setting/index.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -13,13 +14,7 @@ class _MainPageState extends State<MainPage> {
   // 核心：创建 PageController
   final PageController _pageController = PageController();
 
-  final List<Widget> _pages = [
-    HomePage(),
-    Container(
-      color: Colors.yellow,
-      child: const Center(child: Text("设置")),
-    ),
-  ];
+  final List<Widget> _pages = [const HomePage(), const SettingPage()];
 
   @override
   void dispose() {

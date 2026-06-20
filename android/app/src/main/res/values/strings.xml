@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="servicedesc">nfc_use HCE service</string>
+    <string name="aiddescription">nfc_use PN532 HCE AID</string>
+</resources>

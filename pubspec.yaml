@@ -31,9 +31,12 @@ dependencies:
   flutter:
     sdk: flutter
   sqflite: ^2.3.0       # SQLite 数据库插件
+  archive: ^3.6.1        # 压缩包核心处理库
   path_provider: ^2.1.1 # 获取设备本地目录 (如 App Documents)
   path: ^1.8.3          # 处理文件路径拼接
   uuid: ^4.2.1          # 生成全局唯一的卡片 ID
+  flutter_nfc_hce: ^0.1.8
+  nfc_manager: ^3.5.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

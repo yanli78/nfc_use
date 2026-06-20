@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:nfc_use/core/constants/CardItem.dart';
+import 'package:nfc_use/core/constants/card_item.dart';
 import 'package:nfc_use/pages/Home/card_use.dart';
 import 'package:nfc_use/pages/Home/card.dart';
 
@@ -24,6 +24,8 @@ class _HomePageState extends State<HomePage> {
   // 示例数据
   final List<CardItem> _cardItems = [
     CardItem(
+      createdAt: DateTime.now(),
+      id: '1',
       title: '探索宇宙',
       subtitle: '仰望星空，探索未知的奥秘',
       description:
@@ -33,6 +35,8 @@ class _HomePageState extends State<HomePage> {
           'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80',
     ),
     CardItem(
+      createdAt: DateTime.now(),
+      id: '2',
       title: '城市夜景',
       subtitle: '霓虹灯下的都市生活',
       description:
@@ -42,6 +46,8 @@ class _HomePageState extends State<HomePage> {
           'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&q=80',
     ),
     CardItem(
+      createdAt: DateTime.now(),
+      id: '3',
       title: '自然风光',
       subtitle: '远离喧嚣，回归自然',
       description:
@@ -51,6 +57,8 @@ class _HomePageState extends State<HomePage> {
           'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&q=80',
     ),
     CardItem(
+      createdAt: DateTime.now(),
+      id: '4',
       title: '科技未来',
       subtitle: '创新科技，引领未来',
       description:
@@ -91,40 +99,48 @@ class _HomePageState extends State<HomePage> {
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) =>
                 CardDetailScreen(item: item),
+            reverseTransitionDuration: const Duration(milliseconds: 340),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
-                  // 自定义页面切换动画：从下方淡入
                   const begin = Offset(0.0, 1.0);
                   const end = Offset.zero;
-                  const curve = Curves.easeInOut;
 
                   var tween = Tween(
                     begin: begin,
                     end: end,
-                  ).chain(CurveTween(curve: curve));
+                  ).chain(CurveTween(curve: Curves.easeOutCubic));
                   var offsetAnimation = animation.drive(tween);
+                  var opacityAnimation = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutQuad,
+                  );
 
                   return SlideTransition(
                     position: offsetAnimation,
-                    child: FadeTransition(opacity: animation, child: child),
+                    child: FadeTransition(
+                      opacity: opacityAnimation,
+                      child: child,
+                    ),
                   );
                 },
-            transitionDuration: const Duration(milliseconds: 400),
+            transitionDuration: const Duration(milliseconds: 360),
           ),
         )
         .then((_) {
           // 页面返回后重置卡片
-          if (_currentResetCard != null) {
-            _currentResetCard!();
-          }
+          _resetCurrentCard();
         });
 
     // 等页面动画完成后再重置卡片
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (_currentResetCard != null) {
-        _currentResetCard!();
-      }
+    Future.delayed(const Duration(milliseconds: 420), () {
+      _resetCurrentCard();
     });
+  }
+
+  void _resetCurrentCard() {
+    final resetCard = _currentResetCard;
+    _currentResetCard = null;
+    resetCard?.call();
   }
 
   Widget _buildHeader() {
@@ -192,10 +208,7 @@ class _HomePageState extends State<HomePage> {
                 },
                 child: InteractiveGalleryCard(
                   key: _cardKeys[index],
-                  title: item.title,
-                  subtitle: item.subtitle,
-                  color: item.color,
-                  imageUrl: item.imageUrl,
+                  item: item,
                   isActive: _currentPage == index,
                   onTriggerWithReset: (resetCard) =>
                       _openDetailPage(item, resetCard),
@@ -266,7 +279,9 @@ class _SimpleSwipeDetector extends StatefulWidget {
 
 class __SimpleSwipeDetectorState extends State<_SimpleSwipeDetector> {
   Offset? _dragStartPosition;
-  static const double _minSwipeDistance = 80;
+  double _dragDistance = 0;
+  static const double _minSwipeDistance = 48;
+  static const double _minSwipeVelocity = 360;
 
   @override
   Widget build(BuildContext context) {
@@ -274,18 +289,28 @@ class __SimpleSwipeDetectorState extends State<_SimpleSwipeDetector> {
       behavior: HitTestBehavior.opaque,
       onVerticalDragStart: (details) {
         _dragStartPosition = details.localPosition;
+        _dragDistance = 0;
+      },
+      onVerticalDragUpdate: (details) {
+        if (details.delta.dy < 0) {
+          _dragDistance -= details.delta.dy;
+        }
       },
       onVerticalDragEnd: (details) {
         if (_dragStartPosition == null) return;
 
-        // 如果是向上滑动并且距离足够
-        if (details.primaryVelocity != null &&
-            details.primaryVelocity! < 0 &&
-            details.primaryVelocity!.abs() > 50) {
+        final bool hasEnoughDistance = _dragDistance >= _minSwipeDistance;
+        final bool hasEnoughVelocity =
+            details.primaryVelocity != null &&
+            details.primaryVelocity! < -_minSwipeVelocity;
+
+        if (hasEnoughDistance || hasEnoughVelocity) {
           if (widget.onSwipeUp != null) {
             widget.onSwipeUp!();
           }
         }
+        _dragStartPosition = null;
+        _dragDistance = 0;
       },
       child: widget.child,
     );
