@@ -2,12 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:nfc_use/core/constants/card_item.dart';
 import 'package:nfc_use/core/services/nfc_service.dart';
 
+/// 交互式画廊卡片组件
+///
+/// 实现卡片的上滑写入NFC、下滑取消、悬停动画等交互效果。
+/// 支持手势拖动、动画过渡、NFC写入状态反馈等功能。
 class InteractiveGalleryCard extends StatefulWidget {
+  /// 卡片数据对象
   final CardItem item;
+
+  /// 触发回调（不带重置函数）
   final VoidCallback? onTrigger;
+
+  /// 是否为当前激活的卡片（居中显示的卡片）
   final bool isActive;
+
+  /// 触发回调（带重置函数），用于卡片飞出后重置状态
   final Function(Function resetCard)? onTriggerWithReset;
 
+  /// 创建交互式画廊卡片
+  ///
+  /// [item] 卡片数据对象
+  /// [onTrigger] 触发回调（可选）
+  /// [isActive] 是否为激活状态（默认false）
+  /// [onTriggerWithReset] 带重置函数的触发回调（可选）
   const InteractiveGalleryCard({
     super.key,
     required this.item,
@@ -16,7 +33,9 @@ class InteractiveGalleryCard extends StatefulWidget {
     this.onTriggerWithReset,
   });
 
-  // 公开方法，让外部可以触发上滑动画
+  /// 公开静态方法，通过GlobalKey触发卡片上滑动画
+  ///
+  /// [key] 卡片组件的GlobalKey
   static void triggerAnimation(GlobalKey key) {
     final state = key.currentState as _InteractiveGalleryCardState?;
     if (state != null && state.mounted) {
@@ -28,26 +47,31 @@ class InteractiveGalleryCard extends StatefulWidget {
   State<InteractiveGalleryCard> createState() => _InteractiveGalleryCardState();
 }
 
+/// 交互式画廊卡片状态类
+///
+/// 管理卡片的动画控制器、手势状态、滑动偏移等内部状态。
 class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     with SingleTickerProviderStateMixin {
+  /// 动画控制器，用于驱动各种卡片动画
   late AnimationController _animationController;
+
+  /// 滑动偏移动画
   late Animation<Offset> _slideAnimation;
+
+  /// 缩放动画
   late Animation<double> _scaleAnimation;
+
+  /// 透明度动画
   late Animation<double> _opacityAnimation;
+
+  /// 阴影动画
   late Animation<double> _shadowAnimation;
 
+  /// 当前拖动偏移量
   Offset _dragOffset = Offset.zero;
 
-  // null / dragging / hovering / writing / closing / cancelling
+  /// 卡片交互状态机：idle/dragging/hovering/writing/closing/cancelling
   String _phase = 'idle';
-
-  static const double _triggerThreshold = 150;
-  static const double _velocityThreshold = 700;
-  static const double _maxDragDistance = 240;
-  static const Duration _snapBackDuration = Duration(milliseconds: 320);
-  static const Duration _hoverDuration = Duration(milliseconds: 360);
-  static const Duration _exitDuration = Duration(milliseconds: 360);
-  static const Duration _nfcTimeout = Duration(seconds: 8);
 
   @override
   void initState() {
@@ -55,14 +79,16 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     _initAnimations();
   }
 
+  /// 初始化动画控制器和动画对象
   void _initAnimations() {
     _animationController = AnimationController(
       vsync: this,
-      duration: _hoverDuration,
+      duration: kCardHoverDuration,
     );
     _resetAnimations();
   }
 
+  /// 重置所有动画对象到初始状态
   void _resetAnimations() {
     _slideAnimation = Tween<Offset>(begin: Offset.zero, end: Offset.zero)
         .animate(
@@ -92,8 +118,11 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     super.dispose();
   }
 
-  // ================== 手势 ==================
+  // ================== 手势处理 ==================
 
+  /// 处理垂直拖动开始事件
+  ///
+  /// 仅在卡片处于激活状态且非写入/关闭阶段时响应
   void _handleVerticalDragStart(DragStartDetails details) {
     if (!widget.isActive) return;
     if (_phase == 'writing' || _phase == 'closing') return;
@@ -103,6 +132,9 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     });
   }
 
+  /// 处理垂直拖动更新事件
+  ///
+  /// 根据拖动方向和距离更新卡片位置，支持向上拖动和向下推回原位
   void _handleVerticalDragUpdate(DragUpdateDetails details) {
     if (!widget.isActive) return;
     if (_phase != 'dragging') return;
@@ -110,10 +142,9 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     if (details.delta.dy < 0) {
       setState(() {
         final nextOffset = _dragOffset.dy + details.delta.dy;
-        _dragOffset = Offset(0, nextOffset.clamp(-_maxDragDistance, 0));
+        _dragOffset = Offset(0, nextOffset.clamp(-kCardMaxDragDistance, 0));
       });
     } else {
-      // 允许用户把卡片推回 0
       setState(() {
         final nextOffset = _dragOffset.dy + details.delta.dy;
         if (nextOffset >= 0) {
@@ -126,6 +157,9 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     }
   }
 
+  /// 处理垂直拖动结束事件
+  ///
+  /// 根据拖动距离和速度判断是触发NFC写入还是回弹原位
   Future<void> _handleVerticalDragEnd(DragEndDetails details) async {
     if (!widget.isActive) return;
     if (_phase != 'dragging') return;
@@ -133,52 +167,62 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     final double dragDistance = -_dragOffset.dy;
     final bool isFastSwipe =
         details.primaryVelocity != null &&
-        details.primaryVelocity! < -_velocityThreshold;
+        details.primaryVelocity! < -kCardSwipeVelocityThreshold;
 
-    if (dragDistance > _triggerThreshold || isFastSwipe) {
-      // 上滑成功：先悬停在上方 → 扫描 NFC
+    if (dragDistance > kCardSwipeTriggerThreshold || isFastSwipe) {
       await _triggerAction();
     } else {
-      // 距离不足：用户“下滑取消”，平滑回位
       await _animateBackToStart();
     }
   }
 
   // ================== 对外接口 ==================
 
+  /// 触发卡片上滑动画（对外公开方法）
+  ///
+  /// 通常由父组件通过GlobalKey调用此方法
   void triggerCardAnimation() {
     if (!widget.isActive) return;
     if (_phase == 'writing' || _phase == 'closing') return;
     _triggerAction();
   }
 
-  // ================== 核心：上滑 => NFC => 详情页 ==================
+  // ================== 核心交互流程：上滑 => NFC => 详情页 ==================
 
+  /// 触发卡片核心操作流程
+  ///
+  /// 完整流程：
+  /// 1. 卡片悬停到上方位置
+  /// 2. 执行NFC写入操作
+  /// 3a. 成功：卡片飞出屏幕，打开详情页
+  /// 3b. 失败：卡片回弹原位，显示错误提示
   Future<void> _triggerAction() async {
     if (_phase == 'writing' || _phase == 'closing') return;
 
     final screenHeight = MediaQuery.sizeOf(context).height;
     final startOffset = _dragOffset;
 
-    // 1. 先让卡片飞到“悬停在上方”的位置
+    // 步骤1：卡片悬停到上方位置
     setState(() => _phase = 'hovering');
-    _animationController.duration = _hoverDuration;
+    _animationController.duration = kCardHoverDuration;
     _slideAnimation =
         Tween<Offset>(
           begin: startOffset,
-          end: Offset(0, -screenHeight * 0.22),
+          end: Offset(0, -screenHeight * kCardHoverPositionRatio),
         ).animate(
           CurvedAnimation(
             parent: _animationController,
             curve: Curves.easeOutCubic,
           ),
         );
-    _scaleAnimation = Tween<double>(begin: _currentScale, end: 0.96).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-    );
-    _opacityAnimation = Tween<double>(begin: _currentOpacity, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-    );
+    _scaleAnimation = Tween<double>(begin: _currentScale, end: kCardHoverScale)
+        .animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+        );
+    _opacityAnimation = Tween<double>(begin: _currentOpacity, end: 1.0)
+        .animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+        );
     _shadowAnimation = Tween<double>(begin: _currentShadowProgress, end: 1.0)
         .animate(
           CurvedAnimation(
@@ -190,10 +234,10 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     await _animationController.forward(from: 0);
     if (!mounted) return;
 
-    // 2. 扫描 NFC
+    // 步骤2：执行NFC写入操作
     setState(() {
       _phase = 'writing';
-      _dragOffset = Offset(0, -screenHeight * 0.22);
+      _dragOffset = Offset(0, -screenHeight * kCardHoverPositionRatio);
     });
 
     NfcWriteResult result;
@@ -201,10 +245,10 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
       result = await NfcService.instance
           .writeCardId(widget.item)
           .timeout(
-            _nfcTimeout,
+            kNfcWriteTimeout,
             onTimeout: () => const NfcWriteResult(
               status: NfcWriteStatus.tagNotFound,
-              message: '未检测到 NFC 卡片，请重试',
+              message: '未检测到NFC卡片，请重试',
             ),
           );
     } catch (error) {
@@ -217,12 +261,12 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     if (!mounted) return;
 
     if (result.isSuccess) {
-      // 3a. 成功：卡片继续飞出屏幕，然后打开详情页
+      // 步骤3a：成功 - 卡片飞出屏幕，打开详情页
       setState(() => _phase = 'closing');
-      _animationController.duration = _exitDuration;
+      _animationController.duration = kCardExitDuration;
       _slideAnimation =
           Tween<Offset>(
-            begin: Offset(0, -screenHeight * 0.22),
+            begin: Offset(0, -screenHeight * kCardHoverPositionRatio),
             end: Offset(0, -screenHeight),
           ).animate(
             CurvedAnimation(
@@ -230,18 +274,20 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
               curve: Curves.easeInCubic,
             ),
           );
-      _scaleAnimation = Tween<double>(begin: 0.96, end: 0.90).animate(
-        CurvedAnimation(
-          parent: _animationController,
-          curve: Curves.easeInCubic,
-        ),
-      );
-      _opacityAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-        CurvedAnimation(
-          parent: _animationController,
-          curve: Curves.easeOutQuad,
-        ),
-      );
+      _scaleAnimation = Tween<double>(begin: kCardHoverScale, end: kCardExitScale)
+          .animate(
+            CurvedAnimation(
+              parent: _animationController,
+              curve: Curves.easeInCubic,
+            ),
+          );
+      _opacityAnimation = Tween<double>(begin: 1.0, end: 0.0)
+          .animate(
+            CurvedAnimation(
+              parent: _animationController,
+              curve: Curves.easeOutQuad,
+            ),
+          );
       _shadowAnimation = Tween<double>(
         begin: 1.0,
         end: 1.0,
@@ -251,13 +297,13 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
 
       if (mounted) _openDetailPage();
     } else {
-      // 3b. 失败：卡片平滑回到原位，并提示错误
+      // 步骤3b：失败 - 卡片回弹原位，显示错误提示
       _showError(result.message);
       setState(() => _phase = 'cancelling');
-      _animationController.duration = _snapBackDuration;
+      _animationController.duration = kCardSnapBackDuration;
       _slideAnimation =
           Tween<Offset>(
-            begin: Offset(0, -screenHeight * 0.22),
+            begin: Offset(0, -screenHeight * kCardHoverPositionRatio),
             end: Offset.zero,
           ).animate(
             CurvedAnimation(
@@ -265,24 +311,27 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
               curve: Curves.easeOutCubic,
             ),
           );
-      _scaleAnimation = Tween<double>(begin: 0.96, end: 1.0).animate(
-        CurvedAnimation(
-          parent: _animationController,
-          curve: Curves.easeOutCubic,
-        ),
-      );
-      _opacityAnimation = Tween<double>(begin: 1.0, end: 1.0).animate(
-        CurvedAnimation(
-          parent: _animationController,
-          curve: Curves.easeOutCubic,
-        ),
-      );
-      _shadowAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-        CurvedAnimation(
-          parent: _animationController,
-          curve: Curves.easeOutCubic,
-        ),
-      );
+      _scaleAnimation = Tween<double>(begin: kCardHoverScale, end: 1.0)
+          .animate(
+            CurvedAnimation(
+              parent: _animationController,
+              curve: Curves.easeOutCubic,
+            ),
+          );
+      _opacityAnimation = Tween<double>(begin: 1.0, end: 1.0)
+          .animate(
+            CurvedAnimation(
+              parent: _animationController,
+              curve: Curves.easeOutCubic,
+            ),
+          );
+      _shadowAnimation = Tween<double>(begin: 1.0, end: 0.0)
+          .animate(
+            CurvedAnimation(
+              parent: _animationController,
+              curve: Curves.easeOutCubic,
+            ),
+          );
 
       await _animationController.forward(from: 0);
       if (mounted) {
@@ -294,6 +343,9 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     }
   }
 
+  /// 打开详情页并设置重置回调
+  ///
+  /// 当详情页关闭时，通过重置回调恢复卡片状态
   void _openDetailPage() {
     void resetCard() {
       if (mounted) {
@@ -314,6 +366,9 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     }
   }
 
+  /// 显示错误提示消息
+  ///
+  /// 使用SnackBar在屏幕底部显示错误信息
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -324,12 +379,15 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     );
   }
 
-  // ================== 回位 ==================
+  // ================== 回位动画 ==================
 
+  /// 将卡片动画回退到初始位置
+  ///
+  /// 用于用户取消操作或NFC写入失败时的恢复动画
   Future<void> _animateBackToStart() async {
     final startOffset = _dragOffset;
     setState(() => _phase = 'cancelling');
-    _animationController.duration = _snapBackDuration;
+    _animationController.duration = kCardSnapBackDuration;
     _slideAnimation = Tween<Offset>(begin: startOffset, end: Offset.zero)
         .animate(
           CurvedAnimation(
@@ -337,12 +395,14 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
             curve: Curves.easeOutCubic,
           ),
         );
-    _scaleAnimation = Tween<double>(begin: _currentScale, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-    );
-    _opacityAnimation = Tween<double>(begin: _currentOpacity, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-    );
+    _scaleAnimation = Tween<double>(begin: _currentScale, end: 1.0)
+        .animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+        );
+    _opacityAnimation = Tween<double>(begin: _currentOpacity, end: 1.0)
+        .animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+        );
     _shadowAnimation = Tween<double>(begin: _currentShadowProgress, end: 0.0)
         .animate(
           CurvedAnimation(
@@ -360,143 +420,201 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     }
   }
 
-  // ================== 辅助属性 ==================
+  // ================== 辅助计算属性 ==================
 
+  /// 拖动进度（0-1）
+  ///
+  /// 根据当前拖动距离与触发阈值的比例计算
   double get _dragProgress =>
-      (-_dragOffset.dy / _triggerThreshold).clamp(0.0, 1.0);
+      (-_dragOffset.dy / kCardSwipeTriggerThreshold).clamp(0.0, 1.0);
 
-  double get _currentScale => 1.0 - (_dragProgress * 0.08);
+  /// 当前缩放比例
+  ///
+  /// 随着拖动距离增加而减小
+  double get _currentScale => 1.0 - (_dragProgress * kCardDragScaleChange);
 
-  double get _currentOpacity => 1.0 - (_dragProgress * 0.18);
+  /// 当前透明度
+  ///
+  /// 随着拖动距离增加而降低
+  double get _currentOpacity => 1.0 - (_dragProgress * kCardDragOpacityChange);
 
+  /// 当前阴影进度（0-1）
+  ///
+  /// 与拖动进度一致，用于控制阴影效果
   double get _currentShadowProgress => _dragProgress;
 
-  // ================== UI ==================
+  // ================== UI构建 ==================
 
+  /// 构建卡片主体内容
+  ///
+  /// 包含背景图片、渐变遮罩、文字内容和状态提示
   Widget _buildCard() {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(32),
+      borderRadius: BorderRadius.circular(kCardBorderRadius),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 背景图片
-          Image.network(
-            widget.item.imageUrl,
-            fit: BoxFit.cover,
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Center(
-                child: CircularProgressIndicator(
-                  color: widget.item.color,
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                      : null,
-                ),
-              );
-            },
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                color: widget.item.color,
-                child: const Icon(
-                  Icons.broken_image,
-                  color: Colors.white,
-                  size: 60,
-                ),
-              );
-            },
-          ),
-          // 渐变遮罩
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.7),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-          // 底部文字 + 状态提示
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.item.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.item.subtitle,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                if (_phase == 'writing')
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      ),
-                      SizedBox(width: 10),
-                      Text(
-                        '正在写入 NFC...',
-                        style: TextStyle(color: Colors.white, fontSize: 14),
-                      ),
-                    ],
-                  )
-                else if (widget.isActive && _phase != 'closing')
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.keyboard_arrow_up,
-                        color: Colors.white.withValues(alpha: 0.8),
-                        size: 30,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _phase == 'hovering' || _phase == 'writing'
-                            ? '上滑写入 NFC · 下滑取消'
-                            : '上滑写入 NFC',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.8),
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.keyboard_arrow_up,
-                        color: Colors.white.withValues(alpha: 0.8),
-                        size: 30,
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
+          _buildBackgroundImage(),
+          _buildGradientOverlay(),
+          _buildCardContent(),
         ],
       ),
     );
   }
 
+  /// 构建卡片背景图片
+  Widget _buildBackgroundImage() {
+    return Image.network(
+      widget.item.imageUrl,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(
+          child: CircularProgressIndicator(
+            color: widget.item.color,
+            value: loadingProgress.expectedTotalBytes != null
+                ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                : null,
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: widget.item.color,
+          child: const Icon(
+            Icons.broken_image,
+            color: Colors.white,
+            size: 60,
+          ),
+        );
+      },
+    );
+  }
+
+  /// 构建渐变遮罩层
+  ///
+  /// 从透明渐变到半透明黑色，增强文字可读性
+  Widget _buildGradientOverlay() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.transparent,
+            Colors.black.withValues(alpha: 0.7),
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+    );
+  }
+
+  /// 构建卡片内容区域
+  ///
+  /// 包含标题、副标题和状态提示
+  Widget _buildCardContent() {
+    return Padding(
+      padding: kCardDefaultPadding,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildTitle(),
+          const SizedBox(height: 8),
+          _buildSubtitle(),
+          const SizedBox(height: 20),
+          _buildStatusIndicator(),
+        ],
+      ),
+    );
+  }
+
+  /// 构建卡片标题
+  Widget _buildTitle() {
+    return Text(
+      widget.item.title,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
+  /// 构建卡片副标题
+  Widget _buildSubtitle() {
+    return Text(
+      widget.item.subtitle,
+      style: TextStyle(
+        color: Colors.white.withValues(alpha: 0.9),
+        fontSize: 16,
+      ),
+    );
+  }
+
+  /// 构建状态指示器
+  ///
+  /// 根据当前交互状态显示不同的提示内容：
+  /// - writing状态：显示"正在写入NFC..."和加载动画
+  /// - 其他状态：显示"上滑写入NFC"提示
+  Widget _buildStatusIndicator() {
+    if (_phase == 'writing') {
+      return const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              color: Colors.white,
+              strokeWidth: 2,
+            ),
+          ),
+          SizedBox(width: 10),
+          Text(
+            '正在写入NFC...',
+            style: TextStyle(color: Colors.white, fontSize: 14),
+          ),
+        ],
+      );
+    }
+
+    if (widget.isActive && _phase != 'closing') {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.keyboard_arrow_up,
+            color: Colors.white.withValues(alpha: 0.8),
+            size: 30,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _phase == 'hovering' || _phase == 'writing'
+                ? '上滑写入NFC · 下滑取消'
+                : '上滑写入NFC',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.8),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            Icons.keyboard_arrow_up,
+            color: Colors.white.withValues(alpha: 0.8),
+            size: 30,
+          ),
+        ],
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  /// 构建卡片效果层
+  ///
+  /// 整合动画效果和手势检测，应用滑动、缩放、透明度和阴影变换
   Widget _buildEffect() {
     return AnimatedBuilder(
       animation: _animationController,
@@ -520,15 +638,21 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
               scale: scale,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(32),
+                  borderRadius: BorderRadius.circular(kCardBorderRadius),
                   boxShadow: [
                     BoxShadow(
                       color: widget.item.color.withValues(
-                        alpha: 0.32 + (shadowProgress * 0.18),
+                        alpha: kCardShadowBaseOpacity +
+                            (shadowProgress * kCardShadowExpandedOpacity),
                       ),
-                      blurRadius: 18 + (shadowProgress * 18),
+                      blurRadius: kCardShadowBaseBlurRadius +
+                          (shadowProgress * kCardShadowExpandedBlurRadius),
                       spreadRadius: shadowProgress * 2,
-                      offset: Offset(0, 10 - (shadowProgress * 4)),
+                      offset: Offset(
+                        0,
+                        kCardShadowBaseOffset -
+                            (shadowProgress * kCardShadowExpandedOffsetChange),
+                      ),
                     ),
                   ],
                 ),
@@ -545,7 +669,7 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
         onVerticalDragEnd: _handleVerticalDragEnd,
         child: RepaintBoundary(
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 10),
+            margin: kCardDefaultMargin,
             child: _buildCard(),
           ),
         ),

@@ -3,6 +3,9 @@ import 'package:nfc_use/core/constants/card_item.dart';
 import 'package:nfc_use/pages/Home/card_use.dart';
 import 'package:nfc_use/pages/Home/card.dart';
 
+/// 主页组件
+///
+/// 展示卡片画廊列表，支持左右滑动切换卡片、上滑查看详情等交互。
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -10,18 +13,26 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+/// 主页状态类
+///
+/// 管理页面控制器、当前页面索引、卡片重置回调等内部状态。
 class _HomePageState extends State<HomePage> {
+  /// 页面控制器，用于卡片横向滑动
   final PageController _pageController = PageController(
-    viewportFraction: 0.8,
+    viewportFraction: kCardListViewportFraction,
     initialPage: 0,
   );
+
+  /// 当前显示的页面索引
   int _currentPage = 0;
-  // 当前卡片的重置函数引用
+
+  /// 当前卡片的重置函数引用，用于页面返回后恢复卡片状态
   Function? _currentResetCard;
-  // 保存每个卡片的 Key
+
+  /// 保存每个卡片的GlobalKey，用于触发卡片动画
   final List<GlobalKey> _cardKeys = [];
 
-  // 示例数据
+  /// 示例卡片数据列表
   final List<CardItem> _cardItems = [
     CardItem(
       createdAt: DateTime.now(),
@@ -30,7 +41,7 @@ class _HomePageState extends State<HomePage> {
       subtitle: '仰望星空，探索未知的奥秘',
       description:
           '宇宙是一个充满神秘和未知的地方。从最小的原子到最大的星系，宇宙中的一切都遵循着物理定律运行。人类对宇宙的探索从未停止，从伽利略的望远镜到现代的太空探测器，我们正在一步步揭开宇宙的神秘面纱。',
-      color: const Color(0xFF667eea),
+      color: kCardDefaultColors['explore']!,
       imageUrl:
           'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80',
     ),
@@ -41,7 +52,7 @@ class _HomePageState extends State<HomePage> {
       subtitle: '霓虹灯下的都市生活',
       description:
           '当夜幕降临，城市便换上了另一副面孔。霓虹灯闪烁，车水马龙，高楼大厦的灯光构成了一幅美丽的画卷。城市的夜晚充满了活力和机遇，每一盏灯背后都有一个故事。',
-      color: const Color(0xFFf093fb),
+      color: kCardDefaultColors['city']!,
       imageUrl:
           'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&q=80',
     ),
@@ -52,7 +63,7 @@ class _HomePageState extends State<HomePage> {
       subtitle: '远离喧嚣，回归自然',
       description:
           '大自然是最伟大的艺术家。从雄伟的山川到宁静的湖泊，从茂密的森林到广阔的草原，自然的美景总是让人心旷神怡。走进大自然，感受生命的力量，让心灵得到净化。',
-      color: const Color(0xFF4facfe),
+      color: kCardDefaultColors['nature']!,
       imageUrl:
           'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&q=80',
     ),
@@ -63,7 +74,7 @@ class _HomePageState extends State<HomePage> {
       subtitle: '创新科技，引领未来',
       description:
           '科技正在改变我们的生活。人工智能、量子计算、太空探索、生物技术...每一项创新都在推动人类社会向前发展。未来已来，让我们一起见证科技带来的无限可能。',
-      color: const Color(0xFF43e97b),
+      color: kCardDefaultColors['tech']!,
       imageUrl:
           'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&q=80',
     ),
@@ -72,7 +83,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // 初始化每个卡片的 Key
     for (int i = 0; i < _cardItems.length; i++) {
       _cardKeys.add(GlobalKey());
     }
@@ -84,14 +94,17 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // 触发当前卡片的动画并打开详情页
+  /// 触发当前卡片的上滑动画
   void _triggerCurrentCard() {
     if (_currentPage >= 0 && _currentPage < _cardKeys.length) {
       InteractiveGalleryCard.triggerAnimation(_cardKeys[_currentPage]);
     }
   }
 
-  // 核心：打开详情页，等全屏后再重置卡片
+  /// 打开详情页，等页面过渡完成后再重置卡片状态
+  ///
+  /// [item] 要展示的卡片数据
+  /// [resetCard] 卡片重置回调函数
   void _openDetailPage(CardItem item, Function resetCard) {
     _currentResetCard = resetCard;
     Navigator.of(context)
@@ -123,28 +136,27 @@ class _HomePageState extends State<HomePage> {
                     ),
                   );
                 },
-            transitionDuration: const Duration(milliseconds: 360),
+            transitionDuration: kCardExitDuration,
           ),
         )
         .then((_) {
-          // 页面返回后重置卡片
           _resetCurrentCard();
         });
 
-    // 等页面动画完成后再重置卡片
     Future.delayed(const Duration(milliseconds: 420), () {
       _resetCurrentCard();
     });
   }
 
+  /// 执行当前卡片的重置操作
   void _resetCurrentCard() {
     final resetCard = _currentResetCard;
     _currentResetCard = null;
     resetCard?.call();
   }
 
+  /// 构建顶部标题区域
   Widget _buildHeader() {
-    // 顶部区域 - 添加手势检测
     return _SimpleSwipeDetector(
       onSwipeUp: _triggerCurrentCard,
       child: const Padding(
@@ -171,19 +183,17 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 构建卡片列表区域
   Widget _buildCardList() {
-    // 卡片区域
     return Expanded(
       child: Stack(
         children: [
-          // 底部的透明手势检测层
           Positioned.fill(
             child: _SimpleSwipeDetector(
               onSwipeUp: _triggerCurrentCard,
               child: Container(color: Colors.transparent),
             ),
           ),
-          // 前面的 PageView
           PageView.builder(
             controller: _pageController,
             itemCount: _cardItems.length,
@@ -201,7 +211,7 @@ class _HomePageState extends State<HomePage> {
                   }
                   return Center(
                     child: SizedBox(
-                      height: Curves.easeInOut.transform(value) * 380,
+                      height: Curves.easeInOut.transform(value) * kCardDefaultHeight,
                       child: child,
                     ),
                   );
@@ -221,8 +231,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 构建底部指示器区域
   Widget _buildEnd() {
-    // 底部指示器区域 - 添加手势检测
     return _SimpleSwipeDetector(
       onSwipeUp: _triggerCurrentCard,
       child: Column(
@@ -266,9 +276,14 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// 一个简单的手势检测组件
+/// 简单的上滑手势检测组件
+///
+/// 检测用户的上滑操作，并触发回调。
 class _SimpleSwipeDetector extends StatefulWidget {
+  /// 上滑回调
   final VoidCallback? onSwipeUp;
+
+  /// 子组件
   final Widget child;
 
   const _SimpleSwipeDetector({required this.child, this.onSwipeUp});
@@ -278,9 +293,16 @@ class _SimpleSwipeDetector extends StatefulWidget {
 }
 
 class __SimpleSwipeDetectorState extends State<_SimpleSwipeDetector> {
+  /// 拖动起始位置
   Offset? _dragStartPosition;
+
+  /// 当前拖动距离
   double _dragDistance = 0;
+
+  /// 最小滑动距离阈值
   static const double _minSwipeDistance = 48;
+
+  /// 最小滑动速度阈值
   static const double _minSwipeVelocity = 360;
 
   @override
@@ -305,9 +327,7 @@ class __SimpleSwipeDetectorState extends State<_SimpleSwipeDetector> {
             details.primaryVelocity! < -_minSwipeVelocity;
 
         if (hasEnoughDistance || hasEnoughVelocity) {
-          if (widget.onSwipeUp != null) {
-            widget.onSwipeUp!();
-          }
+          widget.onSwipeUp?.call();
         }
         _dragStartPosition = null;
         _dragDistance = 0;
