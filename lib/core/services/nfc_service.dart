@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter_nfc_hce/flutter_nfc_hce.dart';
+import 'package:flutter/services.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_use/core/constants/card_item.dart';
 
@@ -85,25 +85,54 @@ class NfcService {
   /// NFC服务单例实例
   static final NfcService instance = NfcService._();
 
-  /// HCE插件实例
-  final FlutterNfcHce _hce = FlutterNfcHce();
-
-  /// 当前是否正在写入NFC标签
-  bool _isWriting = false;
+  static const String _channelName = 'com.nfc.hce/command';
+  static const MethodChannel _channel = MethodChannel(_channelName);
 
   /// 当前是否正在进行NFC卡模拟
   bool _isEmulating = false;
 
+  /// 当前是否正在写入物理NFC标签
+  bool _isWriting = false;
+
   /// 检查NFC设备是否可用
   ///
   /// 返回 `true` 表示设备支持NFC且已开启，`false` 表示不支持或未开启。
-  Future<bool> isNfcAvailable() {
-    return NfcManager.instance.isAvailable();
+  Future<bool> isNfcAvailable() async {
+    try {
+      final bool result = await _channel.invokeMethod('isNfcEnabled');
+      return result;
+    } catch (_) {
+      return NfcManager.instance.isAvailable();
+    }
+  }
+
+  /// 检查HCE是否可用
+  ///
+  /// 返回 `true` 表示设备支持HCE主机卡模拟功能。
+  Future<bool> isHceSupported() async {
+    try {
+      final bool result = await _channel.invokeMethod('isHceSupported');
+      return result;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 检查当前 HCE 服务是否为系统默认服务
+  ///
+  /// 返回 `true` 表示本应用的 HCE 服务已被设为默认（AID 路由正确）。
+  Future<bool> isDefaultService() async {
+    try {
+      final bool result = await _channel.invokeMethod('isDefaultService');
+      return result;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// 检查NFC权限和状态
   ///
-  /// 综合检测NFC设备是否可用、权限是否已获取。
+  /// 综合检测NFC设备是否可用、HCE是否支持。
   /// 返回包含检测结果的 [NfcWriteResult] 对象。
   Future<NfcWriteResult> checkNfcPermissionAndState() async {
     try {
@@ -112,6 +141,14 @@ class NfcService {
         return NfcWriteResult(
           status: NfcWriteStatus.unavailable,
           message: kNfcUnavailableMessage,
+        );
+      }
+
+      final isHceOk = await isHceSupported();
+      if (!isHceOk) {
+        return NfcWriteResult(
+          status: NfcWriteStatus.hceUnsupported,
+          message: kNfcHceUnsupportedMessage,
         );
       }
 
@@ -128,124 +165,117 @@ class NfcService {
     }
   }
 
-  /// 写入卡片ID到NFC
+  /// 启用或禁用 HCE 模拟响应
   ///
-  /// 根据卡片信息执行NFC写入操作。当前实现调用 [emulateCardIdForPn532]
-  /// 使用HCE模式模拟卡片，以便PN532模块可以读取。
+  /// 启用后，当读卡器发送 SELECT AID (F0010203040506) 指令时，
+  /// 手机会返回 "FlutterAuto" 字符串 + 9000 状态码。
+  /// 禁用后，SELECT AID 返回 6A82（文件未找到）。
   ///
-  /// [card] 卡片数据对象
+  /// [enabled] 是否启用模拟响应
   /// 返回包含操作结果的 [NfcWriteResult] 对象
-  Future<NfcWriteResult> writeCardId(CardItem card) {
-    return emulateCardIdForPn532(card);
+  Future<NfcWriteResult> setEmulationEnabled(
+    bool enabled, {
+    String token = "FlutterAuto",
+  }) async {
+    try {
+      final isNfcEnabled = await isNfcAvailable();
+      if (!isNfcEnabled) {
+        return NfcWriteResult(
+          status: NfcWriteStatus.unavailable,
+          message: kNfcNotEnabledMessage,
+        );
+      }
+
+      final isHceOk = await isHceSupported();
+      if (!isHceOk) {
+        return NfcWriteResult(
+          status: NfcWriteStatus.hceUnsupported,
+          message: kNfcHceUnsupportedMessage,
+        );
+      }
+
+      // 【修改点】：在这里把 token 传给 Android 原生层
+      await _channel.invokeMethod('enableEmulation', {
+        'enabled': enabled,
+        'token': token,
+      });
+      _isEmulating = enabled;
+
+      return NfcWriteResult(
+        status: NfcWriteStatus.success,
+        message: enabled
+            ? kNfcHceStartSuccessMessage
+            : kNfcHceStopSuccessMessage,
+      );
+    } catch (error) {
+      return NfcWriteResult(
+        status: NfcWriteStatus.hceStartFailed,
+        message: error.toString(),
+        error: error,
+      );
+    }
   }
 
-  /// 使用HCE模拟卡片ID，支持PN532模块读取
+  /// 检查当前是否已启用 HCE 模拟响应
+  Future<bool> isEmulationEnabled() async {
+    try {
+      final bool result = await _channel.invokeMethod('isEmulationEnabled');
+      return result;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 写入卡片ID到NFC（启用 HCE 模拟响应）
   ///
-  /// 通过主机卡模拟（HCE）技术，让手机模拟成一张NFC卡片，
-  /// 使得PN532等NFC读写模块可以直接读取手机中的数据。
+  /// 启用 HCE 模拟，当读卡器发送 SELECT AID 时返回 "FlutterAuto"。
   ///
-  /// [card] 卡片数据对象，使用其ID作为模拟内容
-  /// [persistMessage] 是否持久化消息，默认为 `true`
+  /// [card] 卡片数据对象（兼容参数，此实现不依赖卡片ID）
+  /// 返回包含操作结果的 [NfcWriteResult] 对象
+  Future<NfcWriteResult> writeCardId(CardItem card) {
+    // 【修改点】：传入卡片 ID
+    return setEmulationEnabled(true, token: card.id);
+  }
+
+  /// 使用 HCE 模拟，支持PN532模块读取
+  ///
+  /// 启用 HCE 模拟响应，PN532 通过 SELECT AID 指令获取 "FlutterAuto" 字符串。
+  ///
+  /// [card] 卡片数据对象（兼容参数）
+  /// [persistMessage] 兼容参数，此实现中始终启用
   /// 返回包含操作结果的 [NfcWriteResult] 对象
   Future<NfcWriteResult> emulateCardIdForPn532(
     CardItem card, {
     bool persistMessage = true,
   }) {
-    return startHce(card.id, persistMessage: persistMessage);
+    // 【修改点】：传入卡片 ID
+    return setEmulationEnabled(true, token: card.id);
   }
 
-  /// 启动NFC主机卡模拟（HCE）
-  ///
-  /// 开启手机的HCE功能，使其能够模拟NFC标签。
-  /// 模拟的数据将以指定的MIME类型格式发送给读取设备（如PN532模块）。
-  ///
-  /// [value] 要模拟的内容
-  /// [mimeType] 内容的MIME类型，默认为 `text/plain`
-  /// [persistMessage] 是否持久化消息，默认为 `true`
-  /// 返回包含操作结果的 [NfcWriteResult] 对象
+  /// 启动 HCE 模拟（兼容旧接口）
   Future<NfcWriteResult> startHce(
     String value, {
     String mimeType = 'text/plain',
     bool persistMessage = true,
-  }) async {
-    // 1. 校验内容有效性
-    final payload = _formatPayload(value);
-    if (payload == null) {
-      return NfcWriteResult(
-        status: NfcWriteStatus.invalidPayload,
-        message: kNfcInvalidPayloadMessage,
-      );
-    }
-
-    try {
-      // 2. 检查NFC是否已开启
-      final isNfcEnabled = await _hce.isNfcEnabled();
-      if (!isNfcEnabled) {
-        return NfcWriteResult(
-          status: NfcWriteStatus.unavailable,
-          message: kNfcNotEnabledMessage,
-          payload: null,
-        );
-      }
-
-      // 3. 检查设备是否支持HCE
-      final isHceSupported = await _hce.isNfcHceSupported();
-      if (!isHceSupported) {
-        return NfcWriteResult(
-          status: NfcWriteStatus.hceUnsupported,
-          message: kNfcHceUnsupportedMessage,
-          payload: payload,
-        );
-      }
-
-      // 4. 启动HCE服务
-      await _hce.startNfcHce(
-        payload,
-        mimeType: mimeType,
-        persistMessage: persistMessage,
-      );
-      _isEmulating = true;
-
-      return NfcWriteResult(
-        status: NfcWriteStatus.success,
-        message: kNfcHceStartSuccessMessage,
-        payload: payload,
-      );
-    } catch (error) {
-      return NfcWriteResult(
-        status: NfcWriteStatus.hceStartFailed,
-        message: kNfcHceStartFailedMessage,
-        payload: payload,
-        error: error,
-      );
-    }
+  }) {
+    // 【修改点】：传入自定义 value
+    return setEmulationEnabled(true, token: value);
   }
 
-  /// 停止NFC主机卡模拟（HCE）
-  ///
-  /// 关闭手机的HCE功能，停止模拟NFC标签。
-  ///
-  /// 返回包含操作结果的 [NfcWriteResult] 对象
-  Future<NfcWriteResult> stopHce() async {
-    try {
-      await _hce.stopNfcHce();
-      _isEmulating = false;
-
-      return const NfcWriteResult(
-        status: NfcWriteStatus.success,
-        message: kNfcHceStopSuccessMessage,
-      );
-    } catch (error) {
-      return NfcWriteResult(
-        status: NfcWriteStatus.hceStartFailed,
-        message: kNfcHceStopFailedMessage,
-        error: error,
-      );
-    }
+  /// 停止 HCE 模拟（禁用响应）
+  Future<NfcWriteResult> stopHce() {
+    return setEmulationEnabled(false);
   }
 
   /// 获取当前是否正在进行NFC卡模拟
   bool get isEmulating => _isEmulating;
+
+  /// 打开系统NFC设置页面
+  Future<void> openNfcSettings() async {
+    try {
+      await _channel.invokeMethod('openNfcSettings');
+    } catch (_) {}
+  }
 
   /// 写入卡片ID到物理NFC标签
   ///

@@ -36,9 +36,35 @@
             android:name="flutterEmbedding"
             android:value="2" />
         <service
-            android:name="com.novice.flutter_nfc_hce.KHostApduService"
+            android:name=".NfcHceService"
             android:exported="true"
             android:enabled="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/apduservice" />
+        </service>
+        <service
+            android:name=".NfcType4TagService"
+            android:exported="false"
+            android:enabled="false"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/apduservice" />
+        </service>
+        <service
+            android:name="com.novice.flutter_nfc_hce.KHostApduService"
+            android:exported="false"
+            android:enabled="false"
             android:permission="android.permission.BIND_NFC_SERVICE">
             <intent-filter>
                 <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />

@@ -37,6 +37,12 @@ class _CardDetailScreenState extends State<CardDetailScreen>
   /// 是否正在关闭页面
   bool _isClosing = false;
 
+  /// ListView 滚动控制器，用于判断列表是否在顶部
+  final ScrollController _scrollController = ScrollController();
+
+  /// 是否正在下拉（列表在顶部 + 用户继续向下拖）
+  bool _isPullingDown = false;
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +55,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
   @override
   void dispose() {
     _animationController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -144,7 +151,8 @@ class _CardDetailScreenState extends State<CardDetailScreen>
   /// 当前缩放比例
   ///
   /// 随着拖动距离增加而减小
-  double get _currentScale => 1.0 - (_dragProgress * kDetailPageDragScaleChange);
+  double get _currentScale =>
+      1.0 - (_dragProgress * kDetailPageDragScaleChange);
 
   /// 当前透明度
   ///
@@ -157,12 +165,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
   /// 包含关闭按钮、NFC提示图标、标题、副标题和描述信息
   Widget _buildDetailContent() {
     return SafeArea(
-      child: Stack(
-        children: [
-          _buildCloseButton(),
-          _buildMainContent(),
-        ],
-      ),
+      child: Stack(children: [_buildCloseButton(), _buildMainContent()]),
     );
   }
 
@@ -183,6 +186,8 @@ class _CardDetailScreenState extends State<CardDetailScreen>
   /// 包含NFC提示和卡片详细信息
   Widget _buildMainContent() {
     return ListView(
+      controller: _scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(24),
       children: [
         _buildNfcHint(),
@@ -267,14 +272,14 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     );
   }
 
+  /// 判断 ListView 是否在顶部（不能继续向上滚动）
+  bool get _isAtTop {
+    if (!_scrollController.hasClients) return true;
+    return _scrollController.offset <= 0;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // `canPop: _isClosing`：
-    // - 正常交互时 (_isClosing=false) → canPop=false → 系统返回被拦截，
-    //   进入 onPopInvokedWithResult 后播放我们的关闭动画，再 setState _isClosing=true，
-    //   随后 Navigator.pop 就会被真正执行。
-    // - 进入关闭流程后 (_isClosing=true) → canPop=true → 不再拦截，
-    //   避免"永远退不出去"的死循环。
     return PopScope(
       canPop: _isClosing,
       onPopInvokedWithResult: (didPop, _) {
@@ -282,33 +287,49 @@ class _CardDetailScreenState extends State<CardDetailScreen>
       },
       child: Scaffold(
         backgroundColor: widget.item.color,
-        body: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          // 正在关闭时不再接受任何手势。
-          onVerticalDragStart: (_) {
+        body: Listener(
+          onPointerDown: (_) {
             if (_isClosing) return;
             _cancelAnimation();
           },
-          onVerticalDragUpdate: (details) {
+          onPointerMove: (event) {
             if (_isClosing) return;
-            setState(() {
-              final next = _totalDy + details.delta.dy;
-              // 允许向上滑回 0，向下最大到 _maxDragDistance。
-              if (next < 0) {
-                _totalDy = 0;
-              } else if (next > kDetailPageMaxDragDistance) {
-                _totalDy = kDetailPageMaxDragDistance;
-              } else {
-                _totalDy = next;
-              }
-            });
+            final dy = event.delta.dy;
+
+            if (_isPullingDown) {
+              setState(() {
+                final next = _totalDy + dy;
+                if (next < 0) {
+                  _totalDy = 0;
+                  _isPullingDown = false;
+                } else if (next > kDetailPageMaxDragDistance) {
+                  _totalDy = kDetailPageMaxDragDistance;
+                } else {
+                  _totalDy = next;
+                }
+              });
+              return;
+            }
+
+            if (dy > 0 && _isAtTop) {
+              _isPullingDown = true;
+              setState(() {
+                final next = dy;
+                _totalDy = next.clamp(0, kDetailPageMaxDragDistance);
+              });
+            }
           },
-          onVerticalDragEnd: (details) async {
+          onPointerUp: (event) async {
             if (_isClosing) return;
-            final double dragDistance = _totalDy;
-            final double? velocity = details.primaryVelocity;
-            final bool isFastSwipe =
-                velocity != null && velocity > kDetailPageCloseVelocityThreshold;
+            if (!_isPullingDown && _totalDy == 0) return;
+
+            final dragDistance = _totalDy;
+            final velocity = event.delta.dy;
+            final isFastSwipe =
+                velocity > kDetailPageCloseVelocityThreshold * 0.016;
+
+            _isPullingDown = false;
+
             if (dragDistance > kDetailPageCloseThreshold || isFastSwipe) {
               await _closePage();
             } else {
@@ -320,7 +341,6 @@ class _CardDetailScreenState extends State<CardDetailScreen>
               );
             }
           },
-          // 动画只作用于内部内容，手势探测器永远保持在屏幕原位。
           child: AnimatedBuilder(
             animation: _animationController,
             builder: (context, child) {

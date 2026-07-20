@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- File path: android/app/src/main/res/xml/apduservice.xml -->
+<!-- AID 分组配置，AID: F222222222 -->
 <host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/servicedesc"
     android:requireDeviceScreenOn="false"
@@ -6,6 +8,6 @@
     <aid-group
         android:category="other"
         android:description="@string/aiddescription">
-        <aid-filter android:name="D2760000850101" />
+        <aid-filter android:name="F0010203040506" />
     </aid-group>
 </host-apdu-service>
