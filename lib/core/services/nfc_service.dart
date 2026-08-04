@@ -1,8 +1,89 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:mqtt_client/mqtt_client.dart';
+import 'package:mqtt_client/mqtt_server_client.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_use/core/constants/card_item.dart';
+
+/// 发送模式枚举（可扩展）
+enum SendMode {
+  /// NFC HCE 模式：通过近场通信将卡片信息发送到读卡器
+  nfc,
+
+  /// MQTT 模式：通过局域网 MQTT Broker 发送消息
+  mqtt,
+}
+
+/// MQTT 连接状态
+enum MqttConnectionStatus {
+  /// 未连接
+  disconnected,
+
+  /// 正在连接
+  connecting,
+
+  /// 已连接
+  connected,
+
+  /// 连接失败
+  failed,
+}
+
+/// MQTT 配置
+class MqttConfig {
+  final String server;
+  final int port;
+  final String clientId;
+  final String topic;
+  final String username;
+  final String password;
+  final bool useAuth;
+
+  const MqttConfig({
+    required this.server,
+    this.port = 1883,
+    this.clientId = 'nfc_use_app',
+    this.topic = 'nfc_use/send',
+    this.username = '',
+    this.password = '',
+    this.useAuth = false,
+  });
+
+  MqttConfig copyWith({
+    String? server,
+    int? port,
+    String? clientId,
+    String? topic,
+    String? username,
+    String? password,
+    bool? useAuth,
+  }) {
+    return MqttConfig(
+      server: server ?? this.server,
+      port: port ?? this.port,
+      clientId: clientId ?? this.clientId,
+      topic: topic ?? this.topic,
+      username: username ?? this.username,
+      password: password ?? this.password,
+      useAuth: useAuth ?? this.useAuth,
+    );
+  }
+}
+
+/// 统一发送结果
+class SendResult {
+  final bool isSuccess;
+  final String message;
+  final Object? error;
+
+  const SendResult({
+    required this.isSuccess,
+    required this.message,
+    this.error,
+  });
+}
 
 /// NFC写入操作状态枚举
 ///
@@ -93,6 +174,165 @@ class NfcService {
 
   /// 当前是否正在写入物理NFC标签
   bool _isWriting = false;
+
+  // ======== 发送模式 & MQTT 管理（可扩展） ========
+
+  SendMode _sendMode = SendMode.nfc;
+
+  SendMode get sendMode => _sendMode;
+
+  /// 切换发送模式。切换到非 nfc 模式时自动关闭 HCE。
+  Future<void> setSendMode(SendMode mode) async {
+    if (_sendMode == mode) return;
+    if (_sendMode == SendMode.nfc && _isEmulating) {
+      await setEmulationEnabled(false);
+    }
+    if (mode == SendMode.mqtt) {
+      await setEmulationEnabled(false);
+    }
+    _sendMode = mode;
+    _onModeChanged?.call(mode);
+  }
+
+  /// 模式变更监听（供 UI 更新）
+  void Function(SendMode mode)? _onModeChanged;
+  void Function(MqttConnectionStatus status)? _onMqttStatusChanged;
+
+  void setListeners({
+    void Function(SendMode mode)? onModeChanged,
+    void Function(MqttConnectionStatus status)? onMqttStatusChanged,
+  }) {
+    _onModeChanged = onModeChanged;
+    _onMqttStatusChanged = onMqttStatusChanged;
+  }
+
+  void clearListeners() {
+    _onModeChanged = null;
+    _onMqttStatusChanged = null;
+  }
+
+  // ---- MQTT ----
+  MqttServerClient? _mqttClient;
+  MqttConnectionStatus _mqttStatus = MqttConnectionStatus.disconnected;
+  MqttConnectionStatus get mqttStatus => _mqttStatus;
+
+  MqttConfig _mqttConfig = const MqttConfig(server: '192.168.1.100');
+  MqttConfig get mqttConfig => _mqttConfig;
+
+  void setMqttConfig(MqttConfig config) {
+    _mqttConfig = config;
+  }
+
+  bool get isMqttConnected =>
+      _mqttStatus == MqttConnectionStatus.connected &&
+      _mqttClient?.connectionStatus?.state == MqttConnectionState.connected;
+
+  Future<SendResult> connectMqtt() async {
+    if (_mqttStatus == MqttConnectionStatus.connecting) {
+      return const SendResult(isSuccess: false, message: 'MQTT 正在连接，请稍候');
+    }
+    if (isMqttConnected) {
+      return const SendResult(isSuccess: true, message: 'MQTT 已连接');
+    }
+    _updateMqttStatus(MqttConnectionStatus.connecting);
+
+    final client = MqttServerClient(_mqttConfig.server, _mqttConfig.clientId)
+      ..port = _mqttConfig.port
+      ..keepAlivePeriod = 20
+      ..logging(on: false)
+      ..onDisconnected = () {
+        _updateMqttStatus(MqttConnectionStatus.disconnected);
+      }
+      ..onConnected = () {
+        _updateMqttStatus(MqttConnectionStatus.connected);
+      }
+      ..onSubscribed = (_) {}
+      ..onSubscribeFail = (_) {
+        _updateMqttStatus(MqttConnectionStatus.failed);
+      };
+
+    final connMsg = MqttConnectMessage()
+        .withClientIdentifier(_mqttConfig.clientId)
+        .startClean()
+        .withWillQos(MqttQos.atLeastOnce);
+    if (_mqttConfig.useAuth) {
+      connMsg.authenticateAs(_mqttConfig.username, _mqttConfig.password);
+    }
+    client.connectionMessage = connMsg;
+
+    try {
+      await client.connect();
+    } catch (e) {
+      client.disconnect();
+      _updateMqttStatus(MqttConnectionStatus.failed);
+      return SendResult(isSuccess: false, message: 'MQTT 连接失败: $e', error: e);
+    }
+
+    final ok = client.connectionStatus?.state == MqttConnectionState.connected;
+    if (!ok) {
+      client.disconnect();
+      _updateMqttStatus(MqttConnectionStatus.failed);
+      return const SendResult(isSuccess: false, message: 'MQTT 连接状态异常');
+    }
+
+    _mqttClient = client;
+    return const SendResult(isSuccess: true, message: 'MQTT 连接成功');
+  }
+
+  Future<SendResult> disconnectMqtt() async {
+    try {
+      _mqttClient?.disconnect();
+    } catch (_) {}
+    _mqttClient = null;
+    _updateMqttStatus(MqttConnectionStatus.disconnected);
+    return const SendResult(isSuccess: true, message: 'MQTT 已断开');
+  }
+
+  void _updateMqttStatus(MqttConnectionStatus status) {
+    _mqttStatus = status;
+    _onMqttStatusChanged?.call(status);
+  }
+
+  // ======== 统一发送入口（所有模式共用，value 字段不变） ========
+
+  /// 发送 value（统一入口）。调用方只需要关心 value，不关心当前模式。
+  /// 后续增加发送方式时，只需在 switch 中新增分支即可。
+  Future<SendResult> sendValue(dynamic value) async {
+    switch (_sendMode) {
+      case SendMode.nfc:
+        final r = await setEmulationEnabled(true);
+        return SendResult(
+          isSuccess: r.isSuccess,
+          message: r.message,
+          error: r.error,
+        );
+      case SendMode.mqtt:
+        return _publishViaMqtt(value);
+    }
+  }
+
+  /// 发送 value 字符串（NFC 模式固定返回 FlutterAuto，MQTT 模式真实 value 不变）
+  SendResult _publishViaMqtt(dynamic value) {
+    if (!isMqttConnected) {
+      return const SendResult(isSuccess: false, message: 'MQTT 未连接，请先连接');
+    }
+    try {
+      final payloadMap = <String, dynamic>{'value': value};
+      final jsonString = jsonEncode(payloadMap);
+      final builder = MqttClientPayloadBuilder()..addString(jsonString);
+      _mqttClient!.publishMessage(
+        _mqttConfig.topic,
+        MqttQos.atLeastOnce,
+        builder.payload!,
+      );
+      return SendResult(
+        isSuccess: true,
+        message: '已发送 MQTT 消息到 ${_mqttConfig.topic}',
+      );
+    } catch (e) {
+      return SendResult(isSuccess: false, message: 'MQTT 发送失败: $e', error: e);
+    }
+  }
 
   /// 检查NFC设备是否可用
   ///

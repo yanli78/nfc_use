@@ -416,3 +416,90 @@ class SettingGroup extends StatelessWidget {
     );
   }
 }
+
+/// 文本输入框列表项
+///
+/// 用于让用户输入配置信息，如服务器地址、端口、主题等。
+/// 布局：左侧图标 + 标题 + 右侧 TextField。
+class FieldTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? initialValue;
+  final String hintText;
+  final ValueChanged<String>? onChanged;
+  final TextInputType? keyboardType;
+  final bool obscureText;
+
+  const FieldTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.initialValue,
+    this.hintText = '',
+    this.onChanged,
+    this.keyboardType,
+    this.obscureText = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = TextEditingController(text: initialValue);
+    controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: controller.text.length),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFF00966A).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: const Color(0xFF00966A)),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 80,
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: 14, color: Colors.black87),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              keyboardType: keyboardType,
+              obscureText: obscureText,
+              style: const TextStyle(fontSize: 14),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: hintText,
+                hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF00966A), width: 1.5),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
