@@ -36,7 +36,7 @@ class _HomePageState extends State<HomePage> {
   final List<CardItem> _cardItems = [
     CardItem(
       createdAt: DateTime.now(),
-      id: '1',
+      id: 'R1',
       title: '探索宇宙',
       subtitle: '仰望星空，探索未知的奥秘',
       description:
@@ -47,7 +47,7 @@ class _HomePageState extends State<HomePage> {
     ),
     CardItem(
       createdAt: DateTime.now(),
-      id: '2',
+      id: 'R2',
       title: '城市夜景',
       subtitle: '霓虹灯下的都市生活',
       description:
@@ -58,7 +58,7 @@ class _HomePageState extends State<HomePage> {
     ),
     CardItem(
       createdAt: DateTime.now(),
-      id: '3',
+      id: 'R3',
       title: '自然风光',
       subtitle: '远离喧嚣，回归自然',
       description:
@@ -69,7 +69,7 @@ class _HomePageState extends State<HomePage> {
     ),
     CardItem(
       createdAt: DateTime.now(),
-      id: '4',
+      id: 'S4',
       title: '科技未来',
       subtitle: '创新科技，引领未来',
       description:
@@ -211,7 +211,9 @@ class _HomePageState extends State<HomePage> {
                   }
                   return Center(
                     child: SizedBox(
-                      height: Curves.easeInOut.transform(value) * kCardDefaultHeight,
+                      height:
+                          Curves.easeInOut.transform(value) *
+                          kCardDefaultHeight,
                       child: child,
                     ),
                   );
