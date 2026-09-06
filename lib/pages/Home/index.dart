@@ -35,45 +35,29 @@ class _HomePageState extends State<HomePage> {
   /// 示例卡片数据列表
   final List<CardItem> _cardItems = [
     CardItem(
-      createdAt: DateTime.now(),
       id: 'R1',
       title: '探索宇宙',
-      subtitle: '仰望星空，探索未知的奥秘',
-      description:
-          '宇宙是一个充满神秘和未知的地方。从最小的原子到最大的星系，宇宙中的一切都遵循着物理定律运行。人类对宇宙的探索从未停止，从伽利略的望远镜到现代的太空探测器，我们正在一步步揭开宇宙的神秘面纱。',
       color: kCardDefaultColors['explore']!,
       imageUrl:
           'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80',
     ),
     CardItem(
-      createdAt: DateTime.now(),
       id: 'R2',
       title: '城市夜景',
-      subtitle: '霓虹灯下的都市生活',
-      description:
-          '当夜幕降临，城市便换上了另一副面孔。霓虹灯闪烁，车水马龙，高楼大厦的灯光构成了一幅美丽的画卷。城市的夜晚充满了活力和机遇，每一盏灯背后都有一个故事。',
       color: kCardDefaultColors['city']!,
       imageUrl:
           'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&q=80',
     ),
     CardItem(
-      createdAt: DateTime.now(),
       id: 'R3',
       title: '自然风光',
-      subtitle: '远离喧嚣，回归自然',
-      description:
-          '大自然是最伟大的艺术家。从雄伟的山川到宁静的湖泊，从茂密的森林到广阔的草原，自然的美景总是让人心旷神怡。走进大自然，感受生命的力量，让心灵得到净化。',
       color: kCardDefaultColors['nature']!,
       imageUrl:
           'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&q=80',
     ),
     CardItem(
-      createdAt: DateTime.now(),
       id: 'S4',
       title: '科技未来',
-      subtitle: '创新科技，引领未来',
-      description:
-          '科技正在改变我们的生活。人工智能、量子计算、太空探索、生物技术...每一项创新都在推动人类社会向前发展。未来已来，让我们一起见证科技带来的无限可能。',
       color: kCardDefaultColors['tech']!,
       imageUrl:
           'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&q=80',

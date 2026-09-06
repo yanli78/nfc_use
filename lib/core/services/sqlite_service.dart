@@ -14,7 +14,7 @@ class CardDatabaseHelper {
   // 数据库对象
   static Database? _database;
   // 数据库版本号（每次修改表结构时+1）
-  static const int _databaseVersion = 1;
+  static const int _databaseVersion = 2;
   // 数据库文件名
   static const String _databaseName = 'card_database.db';
   // 表名
@@ -48,27 +48,38 @@ class CardDatabaseHelper {
       CREATE TABLE $_tableName (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
-        subtitle TEXT NOT NULL,
-        description TEXT NOT NULL,
         color INTEGER NOT NULL,
         imageUrl TEXT NOT NULL,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT,
         sortOrder INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
     // 创建索引以提升排序和查询性能
     await db.execute('CREATE INDEX idx_sort_order ON $_tableName(sortOrder)');
-    await db.execute('CREATE INDEX idx_created_at ON $_tableName(createdAt)');
   }
 
   // 数据库版本升级时调用
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // 示例：版本1 → 版本2：添加新字段
-    // if (oldVersion < 2) {
-    //   await db.execute('ALTER TABLE $_tableName ADD COLUMN category TEXT');
-    // }
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE ${_tableName}_new (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          color INTEGER NOT NULL,
+          imageUrl TEXT NOT NULL,
+          sortOrder INTEGER NOT NULL DEFAULT 0
+        )
+      ''');
+      await db.execute('''
+        INSERT INTO ${_tableName}_new (id, title, color, imageUrl, sortOrder)
+        SELECT id, title, color, imageUrl, sortOrder FROM $_tableName
+      ''');
+      await db.execute('DROP TABLE $_tableName');
+      await db.execute('ALTER TABLE ${_tableName}_new RENAME TO $_tableName');
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_sort_order ON $_tableName(sortOrder)',
+      );
+    }
   }
 
   // -------------------------- 基础 CRUD 操作 --------------------------
@@ -102,7 +113,7 @@ class CardDatabaseHelper {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
       _tableName,
-      orderBy: 'sortOrder ASC, createdAt DESC',
+      orderBy: 'sortOrder ASC',
     );
     return List.generate(maps.length, (i) => CardItem.fromMap(maps[i]));
   }
@@ -110,11 +121,9 @@ class CardDatabaseHelper {
   /// 更新卡片
   Future<int> updateCard(CardItem card) async {
     final db = await database;
-    // 自动更新updatedAt时间
-    final updatedCard = card.copyWith(updatedAt: DateTime.now());
     return await db.update(
       _tableName,
-      updatedCard.toMap(),
+      card.toMap(),
       where: 'id = ?',
       whereArgs: [card.id],
     );
@@ -157,20 +166,20 @@ class CardDatabaseHelper {
     final offset = (page - 1) * pageSize;
     final maps = await db.query(
       _tableName,
-      orderBy: 'sortOrder ASC, createdAt DESC',
+      orderBy: 'sortOrder ASC',
       limit: pageSize,
       offset: offset,
     );
     return List.generate(maps.length, (i) => CardItem.fromMap(maps[i]));
   }
 
-  /// 搜索卡片（标题或描述包含关键词）
+  /// 搜索卡片（标题包含关键词）
   Future<List<CardItem>> searchCards(String keyword) async {
     final db = await database;
     final maps = await db.query(
       _tableName,
-      where: 'title LIKE ? OR subtitle LIKE ? OR description LIKE ?',
-      whereArgs: ['%$keyword%', '%$keyword%', '%$keyword%'],
+      where: 'title LIKE ?',
+      whereArgs: ['%$keyword%'],
       orderBy: 'sortOrder ASC',
     );
     return List.generate(maps.length, (i) => CardItem.fromMap(maps[i]));

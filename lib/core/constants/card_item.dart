@@ -15,12 +15,6 @@ const String kCardPlaceholderImageUrl =
 /// 卡片最大标题长度
 const int kCardMaxTitleLength = 50;
 
-/// 卡片最大副标题长度
-const int kCardMaxSubtitleLength = 100;
-
-/// 卡片最大描述长度
-const int kCardMaxDescriptionLength = 1000;
-
 /// 卡片圆角半径
 const double kCardBorderRadius = 32;
 
@@ -159,7 +153,7 @@ const double kDetailPageDragOpacityChange = 0.3;
 
 /// 卡片数据模型类
 ///
-/// 用于存储卡片的基本信息，包括业务字段、视觉属性和时间戳。
+/// 用于存储卡片的基本信息，包括业务字段和视觉属性。
 /// 支持从Map转换、转换为Map、复制并修改属性等操作。
 class CardItem {
   /// 卡片唯一标识，使用字符串类型以支持多种ID生成方式（如UUID、时间戳等）
@@ -168,23 +162,11 @@ class CardItem {
   /// 卡片标题
   final String title;
 
-  /// 卡片副标题
-  final String subtitle;
-
-  /// 卡片描述信息
-  final String description;
-
   /// 卡片颜色（用于加载失败时的背景色和进度指示器）
   final Color color;
 
   /// 卡片图片URL
   final String imageUrl;
-
-  /// 卡片创建时间
-  final DateTime createdAt;
-
-  /// 卡片更新时间
-  final DateTime? updatedAt;
 
   /// 卡片排序序号
   final int sortOrder;
@@ -193,37 +175,25 @@ class CardItem {
   ///
   /// [id] 卡片唯一标识
   /// [title] 卡片标题
-  /// [subtitle] 卡片副标题
-  /// [description] 卡片描述信息
   /// [color] 卡片颜色
   /// [imageUrl] 卡片图片URL
-  /// [createdAt] 创建时间
-  /// [updatedAt] 更新时间（可选）
   /// [sortOrder] 排序序号（默认0）
   CardItem({
     required this.id,
     required this.title,
-    required this.subtitle,
-    required this.description,
     required this.color,
     required this.imageUrl,
-    required this.createdAt,
-    this.updatedAt,
     this.sortOrder = 0,
   });
 
-  /// 创建新卡片（自动生成ID和时间）
+  /// 创建新卡片（自动生成ID）
   ///
   /// [title] 卡片标题
-  /// [subtitle] 卡片副标题
-  /// [description] 卡片描述信息
   /// [color] 卡片颜色
   /// [imageUrl] 卡片图片URL
   /// [sortOrder] 排序序号（默认0）
   factory CardItem.create({
     required String title,
-    required String subtitle,
-    required String description,
     required Color color,
     required String imageUrl,
     int sortOrder = 0,
@@ -231,11 +201,8 @@ class CardItem {
     return CardItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: title,
-      subtitle: subtitle,
-      description: description,
       color: color,
       imageUrl: imageUrl,
-      createdAt: DateTime.now(),
       sortOrder: sortOrder,
     );
   }
@@ -247,14 +214,8 @@ class CardItem {
     return CardItem(
       id: map['id'] as String,
       title: map['title'] as String,
-      subtitle: map['subtitle'] as String,
-      description: map['description'] as String,
       color: Color(map['color'] as int),
       imageUrl: map['imageUrl'] as String,
-      createdAt: DateTime.parse(map['createdAt'] as String),
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.parse(map['updatedAt'] as String)
-          : null,
       sortOrder: map['sortOrder'] as int? ?? 0,
     );
   }
@@ -266,12 +227,8 @@ class CardItem {
     return {
       'id': id,
       'title': title,
-      'subtitle': subtitle,
-      'description': description,
       'color': color.toARGB32(),
       'imageUrl': imageUrl,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt?.toIso8601String(),
       'sortOrder': sortOrder,
     };
   }
@@ -282,30 +239,20 @@ class CardItem {
   /// 并根据传入的参数更新指定属性。
   ///
   /// [title] 新的卡片标题（可选）
-  /// [subtitle] 新的卡片副标题（可选）
-  /// [description] 新的卡片描述（可选）
   /// [color] 新的卡片颜色（可选）
   /// [imageUrl] 新的卡片图片URL（可选）
-  /// [updatedAt] 新的更新时间（可选，默认为当前时间）
   /// [sortOrder] 新的排序序号（可选）
   CardItem copyWith({
     String? title,
-    String? subtitle,
-    String? description,
     Color? color,
     String? imageUrl,
-    DateTime? updatedAt,
     int? sortOrder,
   }) {
     return CardItem(
       id: id,
       title: title ?? this.title,
-      subtitle: subtitle ?? this.subtitle,
-      description: description ?? this.description,
       color: color ?? this.color,
       imageUrl: imageUrl ?? this.imageUrl,
-      createdAt: createdAt,
-      updatedAt: updatedAt ?? DateTime.now(),
       sortOrder: sortOrder ?? this.sortOrder,
     );
   }
@@ -322,23 +269,15 @@ class CardItem {
           runtimeType == other.runtimeType &&
           id == other.id &&
           title == other.title &&
-          subtitle == other.subtitle &&
-          description == other.description &&
           color == other.color &&
           imageUrl == other.imageUrl &&
-          createdAt == other.createdAt &&
-          updatedAt == other.updatedAt &&
           sortOrder == other.sortOrder;
 
   @override
   int get hashCode =>
       id.hashCode ^
       title.hashCode ^
-      subtitle.hashCode ^
-      description.hashCode ^
       color.hashCode ^
       imageUrl.hashCode ^
-      createdAt.hashCode ^
-      updatedAt.hashCode ^
       sortOrder.hashCode;
 }

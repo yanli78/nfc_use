@@ -4,7 +4,7 @@ import 'package:nfc_use/core/constants/card_item.dart';
 /// 卡片详情页面组件
 ///
 /// 展示卡片的详细信息，支持下滑返回交互效果。
-/// 页面背景使用卡片颜色，包含标题、副标题、描述等内容。
+/// 页面背景使用卡片颜色，包含标题等内容。
 class CardDetailScreen extends StatefulWidget {
   /// 卡片数据对象
   final CardItem item;
@@ -162,7 +162,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
 
   /// 构建详情页内容区域
   ///
-  /// 包含关闭按钮、NFC提示图标、标题、副标题和描述信息
+  /// 包含关闭按钮、NFC提示图标和标题
   Widget _buildDetailContent() {
     return SafeArea(
       child: Stack(children: [_buildCloseButton(), _buildMainContent()]),
@@ -193,8 +193,6 @@ class _CardDetailScreenState extends State<CardDetailScreen>
         _buildNfcHint(),
         const SizedBox(height: 32),
         _buildTitleSection(),
-        const SizedBox(height: 16),
-        _buildDescriptionSection(),
       ],
     );
   }
@@ -226,7 +224,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
 
   /// 构建标题区域
   ///
-  /// 包含卡片标题和副标题
+  /// 包含卡片标题
   Widget _buildTitleSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,36 +237,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          widget.item.subtitle,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.9),
-            fontSize: 18,
-          ),
-        ),
       ],
-    );
-  }
-
-  /// 构建描述区域
-  ///
-  /// 展示卡片的详细描述信息
-  Widget _buildDescriptionSection() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        widget.item.description,
-        style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.95),
-          fontSize: 16,
-          height: 1.6,
-        ),
-      ),
     );
   }
 

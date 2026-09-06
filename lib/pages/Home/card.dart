@@ -512,7 +512,7 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
 
   /// 构建卡片内容区域
   ///
-  /// 包含标题、副标题和状态提示
+  /// 包含标题和状态提示
   Widget _buildCardContent() {
     return Padding(
       padding: kCardDefaultPadding,
@@ -521,8 +521,6 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildTitle(),
-          const SizedBox(height: 8),
-          _buildSubtitle(),
           const SizedBox(height: 20),
           _buildStatusIndicator(),
         ],
@@ -538,17 +536,6 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
         color: Colors.white,
         fontSize: 28,
         fontWeight: FontWeight.bold,
-      ),
-    );
-  }
-
-  /// 构建卡片副标题
-  Widget _buildSubtitle() {
-    return Text(
-      widget.item.subtitle,
-      style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.9),
-        fontSize: 16,
       ),
     );
   }
