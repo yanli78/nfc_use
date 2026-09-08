@@ -124,8 +124,7 @@ const String kNfcUnavailableMessage = '当前设备不支持NFC，或NFC未开�
 const String kNfcNotEnabledMessage = '当前设备NFC未开启';
 
 /// NFC卡模拟不支持提示
-const String kNfcHceUnsupportedMessage =
-    '当前设备不支持NFC卡模拟，无法被PN532读取';
+const String kNfcHceUnsupportedMessage = '当前设备不支持NFC卡模拟，无法被PN532读取';
 
 /// NFC状态检测失败提示
 const String kNfcStateCheckFailedMessage = 'NFC状态检测失败';

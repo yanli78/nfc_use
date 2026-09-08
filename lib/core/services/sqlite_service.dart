@@ -1,5 +1,6 @@
 // database/card_database_helper.dart
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:nfc_use/core/constants/card_item.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
@@ -11,10 +12,12 @@ class CardDatabaseHelper {
   factory CardDatabaseHelper() => instance;
   CardDatabaseHelper._internal();
 
+  final ValueNotifier<int> cardsRevision = ValueNotifier<int>(0);
+
   // 数据库对象
   static Database? _database;
   // 数据库版本号（每次修改表结构时+1）
-  static const int _databaseVersion = 2;
+  static const int _databaseVersion = 4;
   // 数据库文件名
   static const String _databaseName = 'card_database.db';
   // 表名
@@ -80,6 +83,30 @@ class CardDatabaseHelper {
         'CREATE INDEX IF NOT EXISTS idx_sort_order ON $_tableName(sortOrder)',
       );
     }
+    if (oldVersion >= 3 && oldVersion < 4) {
+      await _rebuildCardsTableWithoutActionPath(db);
+    }
+  }
+
+  Future<void> _rebuildCardsTableWithoutActionPath(Database db) async {
+    await db.execute('''
+      CREATE TABLE ${_tableName}_new (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        color INTEGER NOT NULL,
+        imageUrl TEXT NOT NULL,
+        sortOrder INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute('''
+      INSERT INTO ${_tableName}_new (id, title, color, imageUrl, sortOrder)
+      SELECT id, title, color, imageUrl, sortOrder FROM $_tableName
+    ''');
+    await db.execute('DROP TABLE $_tableName');
+    await db.execute('ALTER TABLE ${_tableName}_new RENAME TO $_tableName');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sort_order ON $_tableName(sortOrder)',
+    );
   }
 
   // -------------------------- 基础 CRUD 操作 --------------------------
@@ -87,11 +114,13 @@ class CardDatabaseHelper {
   /// 插入单张卡片
   Future<int> insertCard(CardItem card) async {
     final db = await database;
-    return await db.insert(
+    final result = await db.insert(
       _tableName,
       card.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace, // 主键冲突时替换
     );
+    _notifyCardsChanged();
+    return result;
   }
 
   /// 根据ID查询单张卡片
@@ -121,24 +150,34 @@ class CardDatabaseHelper {
   /// 更新卡片
   Future<int> updateCard(CardItem card) async {
     final db = await database;
-    return await db.update(
+    final result = await db.update(
       _tableName,
       card.toMap(),
       where: 'id = ?',
       whereArgs: [card.id],
     );
+    _notifyCardsChanged();
+    return result;
   }
 
   /// 根据ID删除卡片
   Future<int> deleteCard(String id) async {
     final db = await database;
-    return await db.delete(_tableName, where: 'id = ?', whereArgs: [id]);
+    final result = await db.delete(
+      _tableName,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    _notifyCardsChanged();
+    return result;
   }
 
   /// 删除所有卡片
   Future<int> deleteAllCards() async {
     final db = await database;
-    return await db.delete(_tableName);
+    final result = await db.delete(_tableName);
+    _notifyCardsChanged();
+    return result;
   }
 
   // -------------------------- 扩展业务操作 --------------------------
@@ -155,6 +194,7 @@ class CardDatabaseHelper {
         );
       }
     });
+    _notifyCardsChanged();
   }
 
   /// 分页查询卡片
@@ -206,6 +246,7 @@ class CardDatabaseHelper {
         );
       }
     });
+    _notifyCardsChanged();
   }
 
   /// 获取最大排序序号（用于添加新卡片时自动排序）
@@ -220,5 +261,9 @@ class CardDatabaseHelper {
     final db = await database;
     await db.close();
     _database = null;
+  }
+
+  void _notifyCardsChanged() {
+    cardsRevision.value++;
   }
 }

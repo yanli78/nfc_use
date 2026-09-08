@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:nfc_use/core/constants/card_item.dart';
 import 'package:nfc_use/core/services/nfc_service.dart';
@@ -217,12 +219,14 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
         );
     _scaleAnimation = Tween<double>(begin: _currentScale, end: kCardHoverScale)
         .animate(
-          CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
         );
-    _opacityAnimation = Tween<double>(begin: _currentOpacity, end: 1.0)
-        .animate(
-          CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-        );
+    _opacityAnimation = Tween<double>(begin: _currentOpacity, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+    );
     _shadowAnimation = Tween<double>(begin: _currentShadowProgress, end: 1.0)
         .animate(
           CurvedAnimation(
@@ -274,20 +278,19 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
               curve: Curves.easeInCubic,
             ),
           );
-      _scaleAnimation = Tween<double>(begin: kCardHoverScale, end: kCardExitScale)
-          .animate(
+      _scaleAnimation =
+          Tween<double>(begin: kCardHoverScale, end: kCardExitScale).animate(
             CurvedAnimation(
               parent: _animationController,
               curve: Curves.easeInCubic,
             ),
           );
-      _opacityAnimation = Tween<double>(begin: 1.0, end: 0.0)
-          .animate(
-            CurvedAnimation(
-              parent: _animationController,
-              curve: Curves.easeOutQuad,
-            ),
-          );
+      _opacityAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Curves.easeOutQuad,
+        ),
+      );
       _shadowAnimation = Tween<double>(
         begin: 1.0,
         end: 1.0,
@@ -311,27 +314,24 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
               curve: Curves.easeOutCubic,
             ),
           );
-      _scaleAnimation = Tween<double>(begin: kCardHoverScale, end: 1.0)
-          .animate(
-            CurvedAnimation(
-              parent: _animationController,
-              curve: Curves.easeOutCubic,
-            ),
-          );
-      _opacityAnimation = Tween<double>(begin: 1.0, end: 1.0)
-          .animate(
-            CurvedAnimation(
-              parent: _animationController,
-              curve: Curves.easeOutCubic,
-            ),
-          );
-      _shadowAnimation = Tween<double>(begin: 1.0, end: 0.0)
-          .animate(
-            CurvedAnimation(
-              parent: _animationController,
-              curve: Curves.easeOutCubic,
-            ),
-          );
+      _scaleAnimation = Tween<double>(begin: kCardHoverScale, end: 1.0).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Curves.easeOutCubic,
+        ),
+      );
+      _opacityAnimation = Tween<double>(begin: 1.0, end: 1.0).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Curves.easeOutCubic,
+        ),
+      );
+      _shadowAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Curves.easeOutCubic,
+        ),
+      );
 
       await _animationController.forward(from: 0);
       if (mounted) {
@@ -395,14 +395,12 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
             curve: Curves.easeOutCubic,
           ),
         );
-    _scaleAnimation = Tween<double>(begin: _currentScale, end: 1.0)
-        .animate(
-          CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-        );
-    _opacityAnimation = Tween<double>(begin: _currentOpacity, end: 1.0)
-        .animate(
-          CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-        );
+    _scaleAnimation = Tween<double>(begin: _currentScale, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+    );
+    _opacityAnimation = Tween<double>(begin: _currentOpacity, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+    );
     _shadowAnimation = Tween<double>(begin: _currentShadowProgress, end: 0.0)
         .animate(
           CurvedAnimation(
@@ -464,8 +462,20 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
 
   /// 构建卡片背景图片
   Widget _buildBackgroundImage() {
+    final imageUrl = widget.item.imageUrl;
+    final isRemoteImage =
+        imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
+
+    if (!isRemoteImage) {
+      return Image.file(
+        File(imageUrl),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildImageFallback(),
+      );
+    }
+
     return Image.network(
-      widget.item.imageUrl,
+      imageUrl,
       fit: BoxFit.cover,
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
@@ -480,15 +490,15 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
         );
       },
       errorBuilder: (context, error, stackTrace) {
-        return Container(
-          color: widget.item.color,
-          child: const Icon(
-            Icons.broken_image,
-            color: Colors.white,
-            size: 60,
-          ),
-        );
+        return _buildImageFallback();
       },
+    );
+  }
+
+  Widget _buildImageFallback() {
+    return Container(
+      color: widget.item.color,
+      child: const Icon(Icons.broken_image, color: Colors.white, size: 60),
     );
   }
 
@@ -499,10 +509,7 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Colors.transparent,
-            Colors.black.withValues(alpha: 0.7),
-          ],
+          colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -629,10 +636,12 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
                   boxShadow: [
                     BoxShadow(
                       color: widget.item.color.withValues(
-                        alpha: kCardShadowBaseOpacity +
+                        alpha:
+                            kCardShadowBaseOpacity +
                             (shadowProgress * kCardShadowExpandedOpacity),
                       ),
-                      blurRadius: kCardShadowBaseBlurRadius +
+                      blurRadius:
+                          kCardShadowBaseBlurRadius +
                           (shadowProgress * kCardShadowExpandedBlurRadius),
                       spreadRadius: shadowProgress * 2,
                       offset: Offset(
@@ -655,10 +664,7 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
         onVerticalDragUpdate: _handleVerticalDragUpdate,
         onVerticalDragEnd: _handleVerticalDragEnd,
         child: RepaintBoundary(
-          child: Container(
-            margin: kCardDefaultMargin,
-            child: _buildCard(),
-          ),
+          child: Container(margin: kCardDefaultMargin, child: _buildCard()),
         ),
       ),
     );

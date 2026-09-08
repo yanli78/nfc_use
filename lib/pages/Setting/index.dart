@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:nfc_use/core/services/card_import_service.dart';
 import 'package:nfc_use/core/services/nfc_service.dart';
+import 'package:nfc_use/core/services/sqlite_service.dart';
+import 'package:nfc_use/core/services/zip.dart';
 import 'package:nfc_use/pages/Setting/setting_item.dart';
 
 // File path: lib/pages/Setting/index.dart
@@ -36,6 +39,7 @@ class _SettingPageState extends State<SettingPage> {
   bool _isDefaultService = false;
   bool _isEmulating = false;
   bool _isLoadingNfc = true;
+  bool _isImportingCards = false;
 
   // ====== MQTT 配置 ======
   late TextEditingController _mqttServerCtrl;
@@ -222,6 +226,55 @@ class _SettingPageState extends State<SettingPage> {
       case MqttConnectionStatus.disconnected:
         return Colors.grey;
     }
+  }
+
+  Future<void> _importCardsFromZip() async {
+    if (_isImportingCards) return;
+
+    setState(() => _isImportingCards = true);
+    try {
+      final zipPath = await ZipService.instance.pickZipFile();
+      if (zipPath == null) return;
+
+      final result = await CardImportService.instance.importFromZip(zipPath);
+      if (!mounted) return;
+
+      final extra = result.warnings.isEmpty
+          ? ''
+          : '，${result.warnings.take(2).join('；')}';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${result.message}$extra')));
+    } on ZipException catch (error) {
+      if (!mounted || error.type == ZipErrorType.canceled) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导入失败：$error')));
+    } finally {
+      if (mounted) setState(() => _isImportingCards = false);
+    }
+  }
+
+  Future<void> _showCardCount() async {
+    final count = await CardDatabaseHelper.instance.getCardCount();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('本地已保存 $count 张卡片')));
+  }
+
+  Future<void> _clearCards() async {
+    await CardDatabaseHelper.instance.deleteAllCards();
+    await CardImportService.instance.clearImportedAssets();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已清空全部卡片')));
   }
 
   // ====== UI ======
@@ -554,28 +607,23 @@ class _SettingPageState extends State<SettingPage> {
       title: '数据管理',
       children: [
         ActionTile(
+          icon: Icons.file_upload,
+          title: _isImportingCards ? '正在导入...' : '导入卡片压缩包',
+          subtitle: '选择包含 config.json 与 resources 图片的 ZIP 文件',
+          onTap: _isImportingCards ? null : _importCardsFromZip,
+        ),
+        ActionTile(
           icon: Icons.inventory_2,
           title: '查看卡片数量',
           subtitle: '查看本地数据库中保存的卡片数',
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('稍后接入 SQLiteService.getCardCount()'),
-              ),
-            );
-          },
+          onTap: _showCardCount,
         ),
         ActionTile(
           icon: Icons.delete_sweep,
           title: '清空全部卡片',
           subtitle: '删除本地数据库中所有卡片，操作不可撤销',
-          onTap: () => _showConfirmDialog('确认清空全部卡片？', '将删除本地数据库中的所有卡片数据。', () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('稍后接入 SQLiteService.deleteAllCards()'),
-              ),
-            );
-          }),
+          onTap: () =>
+              _showConfirmDialog('确认清空全部卡片？', '将删除本地数据库中的所有卡片数据。', _clearCards),
         ),
       ],
     );
@@ -600,7 +648,7 @@ class _SettingPageState extends State<SettingPage> {
   Future<void> _showConfirmDialog(
     String title,
     String message,
-    VoidCallback onConfirm,
+    Future<void> Function() onConfirm,
   ) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -620,7 +668,7 @@ class _SettingPageState extends State<SettingPage> {
         ],
       ),
     );
-    if (confirmed == true) onConfirm();
+    if (confirmed == true) await onConfirm();
   }
 }
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 
@@ -28,7 +29,7 @@ class MqttService {
     try {
       await client.connect();
     } catch (e) {
-      print('MQTT 连接异常: $e');
+      debugPrint('MQTT 连接异常: $e');
       client.disconnect();
       return false;
     }
@@ -42,7 +43,7 @@ class MqttService {
     required dynamic customValue,
   }) {
     if (client.connectionStatus?.state != MqttConnectionState.connected) {
-      print('发送失败: MQTT 未连接');
+      debugPrint('发送失败: MQTT 未连接');
       return;
     }
 
@@ -60,7 +61,7 @@ class MqttService {
     // 3. 发布消息 (此处 QoS 设为 1: atLeastOnce)
     client.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
 
-    print('消息已发送至主题 $topic: $jsonString');
+    debugPrint('消息已发送至主题 $topic: $jsonString');
   }
 
   /// 断开连接
@@ -69,10 +70,10 @@ class MqttService {
   }
 
   void _onConnected() {
-    print('MQTT 连接成功');
+    debugPrint('MQTT 连接成功');
   }
 
   void _onDisconnected() {
-    print('MQTT 连接已断开');
+    debugPrint('MQTT 连接已断开');
   }
 }

@@ -473,7 +473,6 @@ class NfcService {
   /// [card] 卡片数据对象（兼容参数，此实现不依赖卡片ID）
   /// 返回包含操作结果的 [NfcWriteResult] 对象
   Future<NfcWriteResult> writeCardId(CardItem card) {
-    // 【修改点】：传入卡片 ID
     return setEmulationEnabled(true, token: card.id);
   }
 
@@ -488,7 +487,6 @@ class NfcService {
     CardItem card, {
     bool persistMessage = true,
   }) {
-    // 【修改点】：传入卡片 ID
     return setEmulationEnabled(true, token: card.id);
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:nfc_use/core/constants/card_item.dart';
+import 'package:nfc_use/core/services/sqlite_service.dart';
 import 'package:nfc_use/pages/Home/card_use.dart';
 import 'package:nfc_use/pages/Home/card.dart';
 
@@ -32,50 +33,56 @@ class _HomePageState extends State<HomePage> {
   /// 保存每个卡片的GlobalKey，用于触发卡片动画
   final List<GlobalKey> _cardKeys = [];
 
+  bool _isLoadingCards = true;
+
+  /// 当前展示卡片数据列表
+  List<CardItem> _cardItems = [];
+
   /// 示例卡片数据列表
-  final List<CardItem> _cardItems = [
+  static final List<CardItem> _sampleCardItems = [
     CardItem(
-      id: 'R1',
-      title: '探索宇宙',
+      id: 'NONE',
+      title: 'NONE',
       color: kCardDefaultColors['explore']!,
       imageUrl:
           'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80',
-    ),
-    CardItem(
-      id: 'R2',
-      title: '城市夜景',
-      color: kCardDefaultColors['city']!,
-      imageUrl:
-          'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&q=80',
-    ),
-    CardItem(
-      id: 'R3',
-      title: '自然风光',
-      color: kCardDefaultColors['nature']!,
-      imageUrl:
-          'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&q=80',
-    ),
-    CardItem(
-      id: 'S4',
-      title: '科技未来',
-      color: kCardDefaultColors['tech']!,
-      imageUrl:
-          'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&q=80',
     ),
   ];
 
   @override
   void initState() {
     super.initState();
-    for (int i = 0; i < _cardItems.length; i++) {
-      _cardKeys.add(GlobalKey());
-    }
+    CardDatabaseHelper.instance.cardsRevision.addListener(_loadCards);
+    _loadCards();
   }
 
   @override
   void dispose() {
+    CardDatabaseHelper.instance.cardsRevision.removeListener(_loadCards);
     _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCards() async {
+    final cards = await CardDatabaseHelper.instance.getAllCards();
+    if (!mounted) return;
+    setState(() {
+      _cardItems = cards.isEmpty ? _sampleCardItems : cards;
+      _isLoadingCards = false;
+      _currentPage = _cardItems.isEmpty
+          ? 0
+          : _currentPage.clamp(0, _cardItems.length - 1).toInt();
+      _syncCardKeys();
+    });
+  }
+
+  void _syncCardKeys() {
+    while (_cardKeys.length < _cardItems.length) {
+      _cardKeys.add(GlobalKey());
+    }
+    if (_cardKeys.length > _cardItems.length) {
+      _cardKeys.removeRange(_cardItems.length, _cardKeys.length);
+    }
   }
 
   /// 触发当前卡片的上滑动画
@@ -169,6 +176,10 @@ class _HomePageState extends State<HomePage> {
 
   /// 构建卡片列表区域
   Widget _buildCardList() {
+    if (_isLoadingCards) {
+      return const Expanded(child: Center(child: CircularProgressIndicator()));
+    }
+
     return Expanded(
       child: Stack(
         children: [

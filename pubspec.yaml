@@ -35,6 +35,7 @@ dependencies:
   path_provider: ^2.1.1 # 获取设备本地目录 (如 App Documents)
   path: ^1.8.3          # 处理文件路径拼接
   uuid: ^4.2.1          # 生成全局唯一的卡片 ID
+  file_picker: ^10.3.3  # 平台文件选择器
   flutter_nfc_hce: ^0.1.8
   nfc_manager: ^3.5.0
   mqtt_client: ^10.11.11
