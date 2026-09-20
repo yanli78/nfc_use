@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- File path: android/app/src/main/res/xml/apduservice.xml -->
-<!-- AID 分组配置，AID: F222222222 -->
+<!-- HCE payment AID route. Payment category requires apduServiceBanner. -->
 <host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:apduServiceBanner="@drawable/nfc_banner"
     android:description="@string/servicedesc"
     android:requireDeviceScreenOn="false"
     android:requireDeviceUnlock="false">
     <aid-group
-        android:category="other"
+        android:category="payment"
         android:description="@string/aiddescription">
         <aid-filter android:name="F0010203040506" />
     </aid-group>

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:nfc_use/core/services/card_import_service.dart';
 import 'package:nfc_use/core/services/nfc_service.dart';
@@ -40,6 +42,9 @@ class _SettingPageState extends State<SettingPage> {
   bool _isEmulating = false;
   bool _isLoadingNfc = true;
   bool _isImportingCards = false;
+  bool _showNfcDebugInfo = false;
+  NfcDebugInfo _nfcDebugInfo = NfcDebugInfo.empty;
+  Timer? _nfcDebugTimer;
 
   // ====== MQTT 配置 ======
   late TextEditingController _mqttServerCtrl;
@@ -78,10 +83,16 @@ class _SettingPageState extends State<SettingPage> {
     );
 
     _refreshNfcState();
+    _nfcDebugTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (_sendMode == SendMode.nfc && _showNfcDebugInfo) {
+        _refreshNfcDebugInfo();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _nfcDebugTimer?.cancel();
     NfcService.instance.clearListeners();
     _mqttServerCtrl.dispose();
     _mqttPortCtrl.dispose();
@@ -98,20 +109,30 @@ class _SettingPageState extends State<SettingPage> {
     try {
       final hw = await NfcService.instance.isNfcAvailable();
       final hce = await NfcService.instance.isHceSupported();
-      final def = await NfcService.instance.isDefaultService();
+      final def = await NfcService.instance.isDefaultPaymentApp();
       final emu = NfcService.instance.isEmulating;
+      final debug = _showNfcDebugInfo
+          ? await NfcService.instance.getHceDebugInfo()
+          : _nfcDebugInfo;
       if (!mounted) return;
       setState(() {
         _nfcHardwareAvailable = hw;
         _hceSupported = hce;
         _isDefaultService = def;
         _isEmulating = emu;
+        _nfcDebugInfo = debug;
         _isLoadingNfc = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() => _isLoadingNfc = false);
     }
+  }
+
+  Future<void> _refreshNfcDebugInfo() async {
+    final debug = await NfcService.instance.getHceDebugInfo();
+    if (!mounted) return;
+    setState(() => _nfcDebugInfo = debug);
   }
 
   /// NFC 功能综合正常：硬件可用 + HCE 支持
@@ -123,7 +144,7 @@ class _SettingPageState extends State<SettingPage> {
     if (!_hceSupported) return '设备不支持 HCE 卡模拟';
     if (_isEmulating) return '功能正常（卡模拟已启用）';
     if (_sendMode == SendMode.nfc) return '功能正常（待机中）';
-    if (!_isDefaultService) return '功能可用，但未设为默认 HCE 服务';
+    if (!_isDefaultService) return '功能可用，但未设为默认付款应用';
     return '功能正常';
   }
 
@@ -140,6 +161,65 @@ class _SettingPageState extends State<SettingPage> {
     if (!_nfcHardwareAvailable || !_hceSupported) return Icons.error_outline;
     if (_isEmulating) return Icons.check_circle;
     return Icons.info_outline;
+  }
+
+  String get _nfcDebugUpdatedText {
+    final updatedAt = _nfcDebugInfo.updatedAt;
+    if (updatedAt == null) return '暂无更新时间';
+    final hour = updatedAt.hour.toString().padLeft(2, '0');
+    final minute = updatedAt.minute.toString().padLeft(2, '0');
+    final second = updatedAt.second.toString().padLeft(2, '0');
+    return '$hour:$minute:$second';
+  }
+
+  String _compactDebugHex(String value) {
+    if (value.isEmpty) return '暂无';
+    if (value.length <= 48) return value;
+    return '${value.substring(0, 48)}...';
+  }
+
+  List<Widget> _buildNfcDebugTiles() {
+    return [
+      StatusTile(
+        icon: Icons.bug_report,
+        title: '最近识别事件',
+        subtitle: '${_nfcDebugInfo.lastEvent}（$_nfcDebugUpdatedText）',
+        trailing: Icon(
+          _nfcDebugInfo.apduCount > 0
+              ? Icons.sensors
+              : Icons.sensors_off_outlined,
+          color: _nfcDebugInfo.apduCount > 0
+              ? const Color(0xFF00966A)
+              : Colors.grey,
+        ),
+      ),
+      StatusTile(
+        icon: Icons.confirmation_number,
+        title: 'APDU 次数',
+        subtitle: '${_nfcDebugInfo.apduCount} 次',
+      ),
+      StatusTile(
+        icon: Icons.key,
+        title: '当前响应 Token',
+        subtitle: _nfcDebugInfo.token.isEmpty ? '暂无' : _nfcDebugInfo.token,
+      ),
+      StatusTile(
+        icon: Icons.input,
+        title: '最后 APDU',
+        subtitle: _compactDebugHex(_nfcDebugInfo.lastApdu),
+      ),
+      StatusTile(
+        icon: Icons.output,
+        title: '最后响应',
+        subtitle: _compactDebugHex(_nfcDebugInfo.lastResponse),
+      ),
+      ActionTile(
+        icon: Icons.refresh,
+        title: '刷新调试信息',
+        subtitle: '手动读取最近一次 HCE 识别记录',
+        onTap: _refreshNfcDebugInfo,
+      ),
+    ];
   }
 
   // ====== 发送方式切换：切到 NFC 自动开启 HCE，切离自动关闭 ======
@@ -162,6 +242,17 @@ class _SettingPageState extends State<SettingPage> {
     }
 
     _refreshNfcState();
+  }
+
+  Future<void> _requestDefaultPaymentApp() async {
+    final opened = await NfcService.instance.requestSetDefaultPaymentApp();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(opened ? '请在系统弹窗中确认设为默认付款应用' : '无法直接弹出授权窗口，已尝试打开 NFC 设置'),
+      ),
+    );
+    Future.delayed(const Duration(seconds: 1), _refreshNfcState);
   }
 
   // ====== MQTT ======
@@ -451,6 +542,22 @@ class _SettingPageState extends State<SettingPage> {
             color: _isEmulating ? const Color(0xFF00966A) : Colors.grey,
           ),
         ),
+        StatusTile(
+          icon: Icons.account_balance_wallet,
+          title: '默认付款应用',
+          subtitle: _isDefaultService ? '已设为系统默认触碰付款应用' : '尚未设为默认付款应用',
+          trailing: Icon(
+            _isDefaultService ? Icons.check_circle : Icons.error_outline,
+            color: _isDefaultService ? const Color(0xFF00966A) : Colors.orange,
+          ),
+        ),
+        if (!_isDefaultService)
+          ActionTile(
+            icon: Icons.verified_user,
+            title: '设为默认付款应用',
+            subtitle: '唤起系统授权弹窗以接收 payment 分类 AID',
+            onTap: _requestDefaultPaymentApp,
+          ),
         ActionTile(
           icon: Icons.restart_alt,
           title: '重新检测并启动卡模拟',
@@ -464,6 +571,7 @@ class _SettingPageState extends State<SettingPage> {
                   context,
                 ).showSnackBar(SnackBar(content: Text(r.message)));
               }
+              await _refreshNfcDebugInfo();
               _refreshNfcState();
             } else if (!_nfcFunctionalOk && mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -472,6 +580,18 @@ class _SettingPageState extends State<SettingPage> {
             }
           },
         ),
+        ActionTile(
+          icon: _showNfcDebugInfo
+              ? Icons.bug_report
+              : Icons.bug_report_outlined,
+          title: _showNfcDebugInfo ? '隐藏调试信息' : '显示调试信息',
+          subtitle: '查看最近 APDU 与 HCE 响应记录',
+          onTap: () async {
+            setState(() => _showNfcDebugInfo = !_showNfcDebugInfo);
+            if (_showNfcDebugInfo) await _refreshNfcDebugInfo();
+          },
+        ),
+        if (_showNfcDebugInfo) ..._buildNfcDebugTiles(),
         ActionTile(
           icon: Icons.settings,
           title: '打开系统 NFC 设置',

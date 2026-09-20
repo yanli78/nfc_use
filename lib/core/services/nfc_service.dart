@@ -150,6 +150,57 @@ class NfcWriteResult {
   bool get isSuccess => status == NfcWriteStatus.success;
 }
 
+/// HCE 调试快照。
+///
+/// 用于确认读卡器是否真的触发了 Android HCE 服务，以及最近一次 APDU
+/// 交互返回了什么结果。
+class NfcDebugInfo {
+  final bool enabled;
+  final String token;
+  final int apduCount;
+  final String lastEvent;
+  final String lastApdu;
+  final String lastResponse;
+  final DateTime? updatedAt;
+
+  const NfcDebugInfo({
+    required this.enabled,
+    required this.token,
+    required this.apduCount,
+    required this.lastEvent,
+    required this.lastApdu,
+    required this.lastResponse,
+    required this.updatedAt,
+  });
+
+  factory NfcDebugInfo.fromMap(Map<dynamic, dynamic> map) {
+    final rawUpdatedAt = map['updatedAt'];
+    final updatedAtMillis = rawUpdatedAt is int ? rawUpdatedAt : 0;
+
+    return NfcDebugInfo(
+      enabled: map['enabled'] == true,
+      token: (map['token'] ?? '').toString(),
+      apduCount: map['apduCount'] is int ? map['apduCount'] as int : 0,
+      lastEvent: (map['lastEvent'] ?? '暂无 NFC 识别记录').toString(),
+      lastApdu: (map['lastApdu'] ?? '').toString(),
+      lastResponse: (map['lastResponse'] ?? '').toString(),
+      updatedAt: updatedAtMillis > 0
+          ? DateTime.fromMillisecondsSinceEpoch(updatedAtMillis)
+          : null,
+    );
+  }
+
+  static const empty = NfcDebugInfo(
+    enabled: false,
+    token: '',
+    apduCount: 0,
+    lastEvent: '暂无 NFC 识别记录',
+    lastApdu: '',
+    lastResponse: '',
+    updatedAt: null,
+  );
+}
+
 /// NFC服务类
 ///
 /// 提供NFC相关的核心功能，包括：
@@ -363,9 +414,35 @@ class NfcService {
   /// 返回 `true` 表示本应用的 HCE 服务已被设为默认（AID 路由正确）。
   Future<bool> isDefaultService() async {
     try {
-      final bool result = await _channel.invokeMethod('isDefaultService');
+      return isDefaultPaymentApp();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 检查当前 HCE 服务是否为系统默认触碰付款应用。
+  Future<bool> isDefaultPaymentApp() async {
+    try {
+      final bool result = await _channel.invokeMethod('isDefaultPaymentApp');
       return result;
     } catch (_) {
+      return false;
+    }
+  }
+
+  /// 唤起系统弹窗，请求用户将本应用设为默认触碰付款应用。
+  ///
+  /// 部分系统会拦截 ACTION_CHANGE_DEFAULT；此时原生层会尝试打开 NFC 设置，
+  /// Dart 层也会兜底再打开一次 NFC 设置。
+  Future<bool> requestSetDefaultPaymentApp() async {
+    try {
+      final bool result = await _channel.invokeMethod(
+        'requestSetDefaultPaymentApp',
+      );
+      if (!result) await openNfcSettings();
+      return result;
+    } catch (_) {
+      await openNfcSettings();
       return false;
     }
   }
@@ -464,6 +541,17 @@ class NfcService {
     } catch (_) {
       return false;
     }
+  }
+
+  /// 获取 Android HCE 服务记录的调试信息。
+  Future<NfcDebugInfo> getHceDebugInfo() async {
+    try {
+      final result = await _channel.invokeMethod('getHceDebugInfo');
+      if (result is Map) {
+        return NfcDebugInfo.fromMap(result);
+      }
+    } catch (_) {}
+    return NfcDebugInfo.empty;
   }
 
   /// 写入卡片ID到NFC（启用 HCE 模拟响应）

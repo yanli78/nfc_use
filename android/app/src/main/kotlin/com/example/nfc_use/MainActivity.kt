@@ -1,5 +1,6 @@
 package com.example.nfc_use
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.nfc.NfcAdapter
@@ -30,26 +31,30 @@ class MainActivity : FlutterActivity() {
                     result.success(isHceSupported(ctx))
                 }
                 "isDefaultService" -> {
-                    result.success(isDefaultService(ctx))
+                    result.success(isDefaultPaymentApp(ctx))
+                }
+                "isDefaultPaymentApp" -> {
+                    result.success(isDefaultPaymentApp(ctx))
+                }
+                "requestSetDefaultPaymentApp" -> {
+                    result.success(requestSetDefaultPaymentApp())
                 }
                 "enableEmulation" -> {
                     val enabled = call.argument<Boolean>("enabled") ?: true
                     // 获取 Flutter 传来的动态 token，如果没有则默认 "FlutterAuto"
                     val token = call.argument<String>("token") ?: "FlutterAuto"
 
-                    // 保存到 SharedPreferences (跨进程持久化)
-                    val prefs = ctx.getSharedPreferences("hce_prefs", Context.MODE_PRIVATE)
-                    prefs.edit()
-                        .putBoolean("hce_enabled", enabled)
-                        .putString("hce_token", token)
-                        .apply()
-
+                    NfcHceService.resetDebugInfo(ctx, enabled, token)
                     // 保留原本的内存变量更新
                     NfcHceService.setEmulationEnabled(enabled)
                     result.success(true)
                 }
                 "isEmulationEnabled" -> {
-                    result.success(NfcHceService.isEmulationEnabled())
+                    val prefs = ctx.getSharedPreferences("hce_prefs", Context.MODE_PRIVATE)
+                    result.success(prefs.getBoolean("hce_enabled", NfcHceService.isEmulationEnabled()))
+                }
+                "getHceDebugInfo" -> {
+                    result.success(NfcHceService.getDebugInfo(ctx))
                 }
                 "openNfcSettings" -> {
                     openNfcSettings(ctx)
@@ -80,13 +85,28 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun isDefaultService(context: Context): Boolean {
+    private fun isDefaultPaymentApp(context: Context): Boolean {
         return try {
             val adapter = NfcAdapter.getDefaultAdapter(context) ?: return false
             val ce = CardEmulation.getInstance(adapter) ?: return false
-            val component = android.content.ComponentName(context, NfcHceService::class.java)
-            ce.isDefaultServiceForCategory(component, CardEmulation.CATEGORY_OTHER)
+            val component = ComponentName(context, NfcHceService::class.java)
+            ce.isDefaultServiceForCategory(component, CardEmulation.CATEGORY_PAYMENT)
         } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun requestSetDefaultPaymentApp(): Boolean {
+        return try {
+            val component = ComponentName(this, NfcHceService::class.java)
+            val intent = Intent(CardEmulation.ACTION_CHANGE_DEFAULT).apply {
+                putExtra(CardEmulation.EXTRA_CATEGORY, CardEmulation.CATEGORY_PAYMENT)
+                putExtra(CardEmulation.EXTRA_SERVICE_COMPONENT, component)
+            }
+            startActivity(intent)
+            true
+        } catch (e: Exception) {
+            openNfcSettings(this)
             false
         }
     }

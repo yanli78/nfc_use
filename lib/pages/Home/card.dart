@@ -554,52 +554,68 @@ class _InteractiveGalleryCardState extends State<InteractiveGalleryCard>
   /// - 其他状态：显示"上滑写入NFC"提示
   Widget _buildStatusIndicator() {
     if (_phase == 'writing') {
-      return const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(
-              color: Colors.white,
-              strokeWidth: 2,
-            ),
+      return const SizedBox(
+        width: double.infinity,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              ),
+              SizedBox(width: 8),
+              Text(
+                '正在写入NFC...',
+                style: TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ],
           ),
-          SizedBox(width: 10),
-          Text(
-            '正在写入NFC...',
-            style: TextStyle(color: Colors.white, fontSize: 14),
-          ),
-        ],
+        ),
       );
     }
 
     if (widget.isActive && _phase != 'closing') {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.keyboard_arrow_up,
-            color: Colors.white.withValues(alpha: 0.8),
-            size: 30,
+      final label = _phase == 'hovering' || _phase == 'writing'
+          ? '上滑写入NFC · 下滑取消'
+          : '上滑写入NFC';
+
+      return SizedBox(
+        width: double.infinity,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.keyboard_arrow_up,
+                color: Colors.white.withValues(alpha: 0.8),
+                size: 24,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.keyboard_arrow_up,
+                color: Colors.white.withValues(alpha: 0.8),
+                size: 24,
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text(
-            _phase == 'hovering' || _phase == 'writing'
-                ? '上滑写入NFC · 下滑取消'
-                : '上滑写入NFC',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Icon(
-            Icons.keyboard_arrow_up,
-            color: Colors.white.withValues(alpha: 0.8),
-            size: 30,
-          ),
-        ],
+        ),
       );
     }
 

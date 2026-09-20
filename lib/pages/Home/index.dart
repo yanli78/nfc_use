@@ -6,12 +6,6 @@ import 'package:nfc_use/pages/Home/card.dart';
 import 'package:nfc_use/pages/Home/card_sort.dart';
 
 /// 主页组件
-///
-/// 展示卡片画廊列表，支持：
-/// 1. 左右滑动切换卡片
-/// 2. 上滑查看当前卡片详情
-/// 3. 滑到最左/最右继续拖动时，卡片产生轻微拉伸效果
-/// 4. 在边缘继续滑动达到阈值后打开统一的新页面
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -20,28 +14,17 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  /// 页面控制器，用于卡片横向滑动
   final PageController _pageController = PageController(
     viewportFraction: kCardListViewportFraction,
     initialPage: 0,
   );
 
-  /// 当前显示的页面索引
   int _currentPage = 0;
-
-  /// 当前卡片的重置函数引用，用于页面返回后恢复卡片状态
   Function? _currentResetCard;
-
-  /// 保存每个卡片的 GlobalKey，用于触发卡片动画
   final List<GlobalKey> _cardKeys = [];
-
-  /// 是否正在加载卡片
   bool _isLoadingCards = true;
-
-  /// 当前展示卡片数据列表
   List<CardItem> _cardItems = [];
 
-  /// 示例卡片数据列表
   static final List<CardItem> _sampleCardItems = [
     CardItem(
       id: 'NONE',
@@ -52,77 +35,41 @@ class _HomePageState extends State<HomePage> {
     ),
   ];
 
-  // ============================================================
   // 边缘滑动状态
-  // ============================================================
-
-  /// 当前边缘拉伸程度
-  ///
-  /// 0.0 = 正常
-  /// 1.0 = 达到最大拉伸
   double _edgeStretch = 0.0;
-
-  /// 当前是否正在左边缘拉伸
   bool _atLeftEdge = false;
-
-  /// 当前是否正在右边缘拉伸
   bool _atRightEdge = false;
-
-  /// 本次边缘滑动累计距离
   double _edgeDragDistance = 0.0;
-
-  /// 防止重复打开边缘页面
   bool _isOpeningEdgePage = false;
-
   bool _isHorizontalPointerDown = false;
-
   double? _lastPointerX;
-
   bool _isEdgeDragging = false;
-
-  /// 开启边缘页面所需要的最小拖动距离
   static const double _edgeOpenThreshold = 82.0;
-
-  // ============================================================
-  // 生命周期
-  // ============================================================
 
   @override
   void initState() {
     super.initState();
-
     CardDatabaseHelper.instance.cardsRevision.addListener(_loadCards);
-
     _loadCards();
   }
 
   @override
   void dispose() {
     CardDatabaseHelper.instance.cardsRevision.removeListener(_loadCards);
-
     _pageController.dispose();
-
     super.dispose();
   }
 
-  // ============================================================
-  // 数据
-  // ============================================================
-
   Future<void> _loadCards() async {
     final cards = await CardDatabaseHelper.instance.getAllCards();
-
     if (!mounted) return;
 
     setState(() {
       _cardItems = cards.isEmpty ? _sampleCardItems : cards;
-
       _isLoadingCards = false;
-
       _currentPage = _cardItems.isEmpty
           ? 0
           : _currentPage.clamp(0, _cardItems.length - 1).toInt();
-
       _syncCardKeys();
     });
   }
@@ -131,28 +78,34 @@ class _HomePageState extends State<HomePage> {
     while (_cardKeys.length < _cardItems.length) {
       _cardKeys.add(GlobalKey());
     }
-
     if (_cardKeys.length > _cardItems.length) {
       _cardKeys.removeRange(_cardItems.length, _cardKeys.length);
     }
   }
 
   // ============================================================
-  // 当前卡片动画
+  // 当前卡片动画（增加滚动互斥保护）
   // ============================================================
 
-  /// 触发当前卡片的上滑动画
   void _triggerCurrentCard() {
+    // 1. 如果当前正在处理边缘拉伸或正在打开边缘页面，拦截上滑
+    if (_isEdgeDragging || _isOpeningEdgePage) {
+      return;
+    }
+
+    // 2. 如果 PageView 尚未停稳（页面仍处于滑动切换过渡中），拦截上滑
+    if (_pageController.hasClients && _pageController.page != null) {
+      final double pageOffset = (_pageController.page! - _currentPage).abs();
+      if (pageOffset > 0.12) {
+        return;
+      }
+    }
+
     if (_currentPage >= 0 && _currentPage < _cardKeys.length) {
       InteractiveGalleryCard.triggerAnimation(_cardKeys[_currentPage]);
     }
   }
 
-  // ============================================================
-  // 卡片详情页
-  // ============================================================
-
-  /// 打开详情页，等页面过渡完成后再重置卡片状态
   void _openDetailPage(CardItem item, Function resetCard) {
     _currentResetCard = resetCard;
 
@@ -162,23 +115,18 @@ class _HomePageState extends State<HomePage> {
             pageBuilder: (context, animation, secondaryAnimation) {
               return CardDetailScreen(item: item);
             },
-
             transitionDuration: kCardExitDuration,
-
             reverseTransitionDuration: const Duration(milliseconds: 340),
-
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
                   const begin = Offset(0.0, 1.0);
                   const end = Offset.zero;
-
                   final tween = Tween<Offset>(
                     begin: begin,
                     end: end,
                   ).chain(CurveTween(curve: Curves.easeOutCubic));
 
                   final offsetAnimation = animation.drive(tween);
-
                   final opacityAnimation = CurvedAnimation(
                     parent: animation,
                     curve: Curves.easeOutQuad,
@@ -198,40 +146,20 @@ class _HomePageState extends State<HomePage> {
           _resetCurrentCard();
         });
 
-    /// 防止某些情况下页面返回动画已经结束，
-    /// 但是卡片状态没有及时恢复。
     Future.delayed(const Duration(milliseconds: 420), () {
       if (!mounted) return;
       _resetCurrentCard();
     });
   }
 
-  /// 执行当前卡片的重置操作
   void _resetCurrentCard() {
     final resetCard = _currentResetCard;
-
     _currentResetCard = null;
-
     resetCard?.call();
   }
 
-  /// 打开排序页面
-  ///
-  /// 左边缘和右边缘最终进入同一个 CardSortPage。
-  ///
-  /// fromLeft == true
-  ///     从左边进入排序页面
-  ///
-  /// fromLeft == false
-  ///     从右边进入排序页面
   Future<void> _openEdgePage({required bool fromLeft}) async {
-    if (_isOpeningEdgePage) {
-      return;
-    }
-
-    if (_cardItems.isEmpty) {
-      return;
-    }
+    if (_isOpeningEdgePage || _cardItems.isEmpty) return;
 
     _isOpeningEdgePage = true;
 
@@ -242,25 +170,18 @@ class _HomePageState extends State<HomePage> {
           pageBuilder: (context, animation, secondaryAnimation) {
             return CardSortPage(items: _cardItems, fromLeft: fromLeft);
           },
-
-          // 页面进入动画
           transitionDuration: const Duration(milliseconds: 320),
-
-          // 返回动画
           reverseTransitionDuration: const Duration(milliseconds: 280),
-
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             final Offset begin = fromLeft
                 ? const Offset(-1.0, 0.0)
                 : const Offset(1.0, 0.0);
-
             final Animatable<Offset> tween = Tween<Offset>(
               begin: begin,
               end: Offset.zero,
             ).chain(CurveTween(curve: Curves.easeOutCubic));
 
             final Animation<Offset> offsetAnimation = animation.drive(tween);
-
             final Animation<double> opacityAnimation = CurvedAnimation(
               parent: animation,
               curve: Curves.easeOutQuad,
@@ -274,25 +195,11 @@ class _HomePageState extends State<HomePage> {
         ),
       );
 
-      // ----------------------------------------------------------
-      // 排序页面返回了新的列表
-      // ----------------------------------------------------------
-      //
-      // CardSortPage 保存 SQLite 后会 pop(_items)
-      //
-      // 这里立即更新 HomePage。
-      // 同时 cardsRevision 也会触发 _loadCards，
-      // 两边最终保持一致。
-      //
-      if (!mounted || result == null) {
-        return;
-      }
+      if (!mounted || result == null) return;
 
       setState(() {
         _cardItems = List<CardItem>.from(result);
-
         _currentPage = _currentPage.clamp(0, _cardItems.length - 1).toInt();
-
         _syncCardKeys();
       });
     } finally {
@@ -300,11 +207,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ============================================================
-  // Header
-  // ============================================================
-
-  /// 构建顶部标题区域
   Widget _buildHeader() {
     return _SimpleSwipeDetector(
       onSwipeUp: _triggerCurrentCard,
@@ -332,11 +234,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ============================================================
-  // Card List
-  // ============================================================
-
-  /// 构建卡片列表区域
   Widget _buildCardList() {
     if (_isLoadingCards) {
       return const Expanded(child: Center(child: CircularProgressIndicator()));
@@ -345,74 +242,46 @@ class _HomePageState extends State<HomePage> {
     return Expanded(
       child: Stack(
         children: [
-          // ------------------------------------------------------
-          // 上滑检测层
-          // ------------------------------------------------------
           Positioned.fill(
             child: _SimpleSwipeDetector(
               onSwipeUp: _triggerCurrentCard,
               child: Container(color: Colors.transparent),
             ),
           ),
-
-          // ------------------------------------------------------
-          // PageView
-          // ------------------------------------------------------
           Listener(
             onPointerDown: _handlePointerDown,
             onPointerMove: _handlePointerMove,
             onPointerUp: _handlePointerUp,
             onPointerCancel: _handlePointerCancel,
-
             child: PageView.builder(
               controller: _pageController,
-
-              // 使用 BouncingScrollPhysics，
-              // 让 Android 也可以在边界继续产生 overscroll。
               physics: const BouncingScrollPhysics(parent: PageScrollPhysics()),
-
               itemCount: _cardItems.length,
-
               onPageChanged: (index) {
                 setState(() {
                   _currentPage = index;
                 });
               },
-
               itemBuilder: (context, index) {
                 final CardItem item = _cardItems[index];
 
                 return AnimatedBuilder(
                   animation: _pageController,
-
                   builder: (context, child) {
                     double value = 1.0;
-
                     if (_pageController.position.haveDimensions &&
                         _pageController.page != null) {
                       value = _pageController.page! - index;
-
                       value = (1 - (value.abs() * 0.1)).clamp(0.8, 1.0);
                     }
 
-                    // ------------------------------------------------
-                    // 只让当前卡片产生边缘拉伸
-                    // ------------------------------------------------
-
                     final bool isCurrent = _currentPage == index;
-
                     final bool isStretching =
                         isCurrent &&
                         (_atLeftEdge || _atRightEdge) &&
                         _edgeStretch > 0;
-
                     final double stretch = isStretching ? _edgeStretch : 0.0;
 
-                    // 左边缘继续右拖：
-                    // 卡片向右移动
-                    //
-                    // 右边缘继续左拖：
-                    // 卡片向左移动
                     final double horizontalOffset = _atLeftEdge
                         ? stretch * 12.0
                         : _atRightEdge
@@ -424,14 +293,10 @@ class _HomePageState extends State<HomePage> {
                         height:
                             Curves.easeInOut.transform(value) *
                             kCardDefaultHeight,
-
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 80),
-
                           curve: Curves.easeOut,
-
                           transformAlignment: Alignment.center,
-
                           transform: Matrix4.identity()
                             ..translateByDouble(
                               horizontalOffset,
@@ -439,23 +304,15 @@ class _HomePageState extends State<HomePage> {
                               0.0,
                               1.0,
                             ),
-
                           child: child,
                         ),
                       ),
                     );
                   },
-
-                  // --------------------------------------------------
-                  // 实际卡片
-                  // --------------------------------------------------
                   child: InteractiveGalleryCard(
                     key: _cardKeys[index],
-
                     item: item,
-
                     isActive: _currentPage == index,
-
                     onTriggerWithReset: (resetCard) {
                       _openDetailPage(item, resetCard);
                     },
@@ -472,55 +329,32 @@ class _HomePageState extends State<HomePage> {
   void _handlePointerDown(PointerDownEvent event) {
     _isHorizontalPointerDown = true;
     _lastPointerX = event.position.dx;
-
     _edgeDragDistance = 0.0;
     _edgeStretch = 0.0;
-
     _atLeftEdge = false;
     _atRightEdge = false;
-
     _isEdgeDragging = false;
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
-    if (!_isHorizontalPointerDown) {
-      return;
-    }
-
-    if (_lastPointerX == null) {
-      return;
-    }
+    if (!_isHorizontalPointerDown || _lastPointerX == null) return;
 
     final double currentX = event.position.dx;
     final double deltaX = currentX - _lastPointerX!;
-
     _lastPointerX = currentX;
 
-    if (deltaX == 0) {
-      return;
-    }
-
-    if (!_pageController.hasClients) {
-      return;
-    }
+    if (deltaX == 0 || !_pageController.hasClients) return;
 
     final position = _pageController.position;
-
-    if (!position.hasContentDimensions) {
-      return;
-    }
+    if (!position.hasContentDimensions) return;
 
     final bool isAtLeft = position.pixels <= position.minScrollExtent + 0.5;
-
     final bool isAtRight = position.pixels >= position.maxScrollExtent - 0.5;
 
-    // 第一张，继续向右拖
     if (isAtLeft && deltaX > 0) {
       _atLeftEdge = true;
       _atRightEdge = false;
-
       _isEdgeDragging = true;
-
       _edgeDragDistance += deltaX;
 
       if (mounted) {
@@ -528,17 +362,13 @@ class _HomePageState extends State<HomePage> {
           _edgeStretch = (_edgeDragDistance / 100.0).clamp(0.0, 1.0);
         });
       }
-
       return;
     }
 
-    // 最后一张，继续向左拖
     if (isAtRight && deltaX < 0) {
       _atLeftEdge = false;
       _atRightEdge = true;
-
       _isEdgeDragging = true;
-
       _edgeDragDistance += -deltaX;
 
       if (mounted) {
@@ -546,39 +376,29 @@ class _HomePageState extends State<HomePage> {
           _edgeStretch = (_edgeDragDistance / 100.0).clamp(0.0, 1.0);
         });
       }
-
       return;
     }
   }
 
   void _handlePointerUp(PointerUpEvent event) {
-    if (!_isHorizontalPointerDown) {
-      return;
-    }
+    if (!_isHorizontalPointerDown) return;
 
     final bool shouldOpen =
         _isEdgeDragging && _edgeDragDistance >= _edgeOpenThreshold;
-
     final bool fromLeft = _atLeftEdge;
     final bool fromRight = _atRightEdge;
 
     _isHorizontalPointerDown = false;
     _lastPointerX = null;
-
     _edgeDragDistance = 0.0;
     _edgeStretch = 0.0;
-
     _isEdgeDragging = false;
     _atLeftEdge = false;
     _atRightEdge = false;
 
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
 
-    if (!shouldOpen) {
-      return;
-    }
+    if (!shouldOpen) return;
 
     if (fromLeft) {
       _openEdgePage(fromLeft: true);
@@ -590,28 +410,18 @@ class _HomePageState extends State<HomePage> {
   void _handlePointerCancel(PointerCancelEvent event) {
     _isHorizontalPointerDown = false;
     _lastPointerX = null;
-
     _edgeDragDistance = 0.0;
     _edgeStretch = 0.0;
-
     _isEdgeDragging = false;
     _atLeftEdge = false;
     _atRightEdge = false;
 
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
-  // ============================================================
-  // Bottom indicator
-  // ============================================================
-
-  /// 构建底部指示器区域
   Widget _buildEnd() {
     return _SimpleSwipeDetector(
       onSwipeUp: _triggerCurrentCard,
-
       child: Column(
         children: [
           Padding(
@@ -621,16 +431,11 @@ class _HomePageState extends State<HomePage> {
               children: List.generate(_cardItems.length, (index) {
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
-
                   width: _currentPage == index ? 24 : 8,
-
                   height: 8,
-
                   margin: const EdgeInsets.symmetric(horizontal: 4),
-
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(4),
-
                     color: _currentPage == index
                         ? const Color(0xFF00966A)
                         : Colors.grey[300],
@@ -639,26 +444,19 @@ class _HomePageState extends State<HomePage> {
               }),
             ),
           ),
-
           const SizedBox(height: 40),
         ],
       ),
     );
   }
 
-  // ============================================================
-  // Build
-  // ============================================================
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-
           children: [_buildHeader(), _buildCardList(), _buildEnd()],
         ),
       ),
@@ -667,17 +465,12 @@ class _HomePageState extends State<HomePage> {
 }
 
 // ================================================================
-// 上滑手势检测
+// 上滑手势检测（防斜滑误触重构版）
 // ================================================================
 
-/// 简单的上滑手势检测组件
-///
-/// 检测用户的上滑操作，并触发回调。
+/// 带方向角与比例过滤的上滑检测组件
 class _SimpleSwipeDetector extends StatefulWidget {
-  /// 上滑回调
   final VoidCallback? onSwipeUp;
-
-  /// 子组件
   final Widget child;
 
   const _SimpleSwipeDetector({required this.child, this.onSwipeUp});
@@ -687,56 +480,92 @@ class _SimpleSwipeDetector extends StatefulWidget {
 }
 
 class _SimpleSwipeDetectorState extends State<_SimpleSwipeDetector> {
-  /// 拖动起始位置
-  Offset? _dragStartPosition;
+  Offset? _startGlobalPos;
+  Offset? _lastGlobalPos;
 
-  /// 当前拖动距离
-  double _dragDistance = 0;
+  /// 本轮手势是否已被作废（一旦检测到明显横滑意图，设为 true，绝不触发上滑）
+  bool _isDisqualified = false;
 
-  /// 最小滑动距离阈值
-  static const double _minSwipeDistance = 48;
+  /// 触发上滑的最小向上位移（提升至 64，避免手指轻微抖动即触发）
+  static const double _minSwipeDistance = 64.0;
 
-  /// 最小滑动速度阈值
-  static const double _minSwipeVelocity = 360;
+  /// 触发快速上滑的最小向上速度
+  static const double _minSwipeVelocity = 450.0;
+
+  /// 垂直位移与水平位移的最小比例（dy / dx 需 >= 1.5，对应夹角约 56° 以上）
+  static const double _directionRatio = 1.5;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-
       onVerticalDragStart: (details) {
-        _dragStartPosition = details.localPosition;
-
-        _dragDistance = 0;
+        _startGlobalPos = details.globalPosition;
+        _lastGlobalPos = details.globalPosition;
+        _isDisqualified = false;
       },
-
       onVerticalDragUpdate: (details) {
-        if (details.delta.dy < 0) {
-          _dragDistance -= details.delta.dy;
-        }
-      },
+        if (_isDisqualified || _startGlobalPos == null) return;
 
-      onVerticalDragEnd: (details) {
-        if (_dragStartPosition == null) {
+        _lastGlobalPos = details.globalPosition;
+
+        final double totalDx = (details.globalPosition.dx - _startGlobalPos!.dx)
+            .abs();
+        final double totalDy =
+            _startGlobalPos!.dy - details.globalPosition.dy; // 向上为正
+
+        // 1. 水平位移已经产生（>18px），且水平位移大于或接近垂直位移，说明是横滑或斜滑，立即永久否决本次上滑
+        if (totalDx > 18.0 && totalDx >= totalDy) {
+          _isDisqualified = true;
           return;
         }
 
-        final bool hasEnoughDistance = _dragDistance >= _minSwipeDistance;
+        // 2. 如果是明显向下滑动（>24px），也立即否决
+        if (totalDy < -24.0) {
+          _isDisqualified = true;
+          return;
+        }
+      },
+      onVerticalDragEnd: (details) {
+        if (_isDisqualified ||
+            _startGlobalPos == null ||
+            _lastGlobalPos == null) {
+          _reset();
+          return;
+        }
 
-        final bool hasEnoughVelocity =
-            details.primaryVelocity != null &&
-            details.primaryVelocity! < -_minSwipeVelocity;
+        final double totalDx = (_lastGlobalPos!.dx - _startGlobalPos!.dx).abs();
+        final double totalDy = _startGlobalPos!.dy - _lastGlobalPos!.dy; // 向上为正
 
-        if (hasEnoughDistance || hasEnoughVelocity) {
+        final double vy = details.velocity.pixelsPerSecond.dy; // 向上为负
+        final double vx = details.velocity.pixelsPerSecond.dx.abs();
+
+        // 判定 1：距离判定（净向上位移达标，且垂直位移显著大于水平位移）
+        final bool isDistanceValid =
+            totalDy >= _minSwipeDistance &&
+            totalDy >= (totalDx * _directionRatio);
+
+        // 判定 2：速度判定（垂直速度达标，且向上速度明显大于横向速度，防止横甩时误触）
+        final bool isVelocityValid =
+            vy <= -_minSwipeVelocity &&
+            (-vy) >= (vx * _directionRatio) &&
+            totalDy > 16.0;
+
+        if (isDistanceValid || isVelocityValid) {
           widget.onSwipeUp?.call();
         }
 
-        _dragStartPosition = null;
-        _dragDistance = 0;
+        _reset();
       },
-
+      onVerticalDragCancel: _reset,
       child: widget.child,
     );
+  }
+
+  void _reset() {
+    _startGlobalPos = null;
+    _lastGlobalPos = null;
+    _isDisqualified = false;
   }
 }
 
@@ -744,12 +573,6 @@ class _SimpleSwipeDetectorState extends State<_SimpleSwipeDetector> {
 // 边缘进入的新页面
 // ================================================================
 
-/// 左右边缘滑动后打开的统一页面
-///
-/// 左边缘和右边缘最终都会进入这个页面。
-///
-/// 这里先给一个完整可运行的示例页面。
-/// 之后你只需要把这个页面的内容换成你的实际页面即可。
 class EdgeActionPage extends StatelessWidget {
   const EdgeActionPage({super.key});
 
@@ -757,60 +580,44 @@ class EdgeActionPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-
       appBar: AppBar(
         title: const Text('新页面'),
-
         elevation: 0,
-
         backgroundColor: Colors.grey[100],
-
         foregroundColor: Colors.black87,
       ),
-
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-
           children: [
             Container(
               width: 90,
               height: 90,
-
               decoration: BoxDecoration(
                 color: const Color(0xFF00966A),
-
                 borderRadius: BorderRadius.circular(24),
               ),
-
               child: const Icon(
                 Icons.arrow_forward_rounded,
                 color: Colors.white,
                 size: 42,
               ),
             ),
-
             const SizedBox(height: 24),
-
             const Text(
               '边缘页面',
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
-
             const SizedBox(height: 10),
-
             Text(
               '从左右任意一侧滑到尽头即可进入',
               style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
-
             const SizedBox(height: 32),
-
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
               },
-
               child: const Text('返回'),
             ),
           ],

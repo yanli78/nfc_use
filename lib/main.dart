@@ -11,7 +11,7 @@ void main() {
 
 Widget getRootWidget() {
   return MaterialApp(
-    title: '数字钱包',
+    title: 'NFC Use',
     debugShowCheckedModeBanner: false,
     //命名路由
     initialRoute: "/", //初始路由
