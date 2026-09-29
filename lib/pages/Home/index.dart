@@ -216,7 +216,7 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '精选画廊',
+              '卡包',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -225,7 +225,7 @@ class _HomePageState extends State<HomePage> {
             ),
             SizedBox(height: 8),
             Text(
-              '左右滑动切换 · 上滑任意位置查看详情',
+              '左右滑动切换 · 上滑进行选择',
               style: TextStyle(fontSize: 14, color: Colors.grey),
             ),
           ],

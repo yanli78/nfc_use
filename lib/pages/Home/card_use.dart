@@ -1,46 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:nfc_use/core/constants/card_item.dart';
+import 'dart:io';
 
 /// 卡片详情页面组件
-///
-/// 展示卡片的详细信息，支持下滑返回交互效果。
-/// 页面背景使用卡片颜色，包含标题等内容。
 class CardDetailScreen extends StatefulWidget {
-  /// 卡片数据对象
   final CardItem item;
 
-  /// 创建卡片详情页面
-  ///
-  /// [item] 要展示的卡片数据对象
   const CardDetailScreen({super.key, required this.item});
 
   @override
   State<CardDetailScreen> createState() => _CardDetailScreenState();
 }
 
-/// 卡片详情页面状态类
-///
-/// 管理页面的动画控制器、拖动状态、关闭状态等内部状态。
-/// 实现下滑返回、系统返回键处理等交互功能。
 class _CardDetailScreenState extends State<CardDetailScreen>
     with SingleTickerProviderStateMixin {
-  /// 动画控制器，用于驱动页面关闭动画
   late AnimationController _animationController;
-
-  /// 单一真相源：当前垂直位移。0 = 原位，正数 = 向下拖。
   double _totalDy = 0;
-
-  /// 动画令牌：每次启动动画就递增，老动画的listener会比较这个值，
-  /// 一旦不匹配就不再setState，避免多段动画互相干扰。
   int _animToken = 0;
-
-  /// 是否正在关闭页面
   bool _isClosing = false;
-
-  /// ListView 滚动控制器，用于判断列表是否在顶部
   final ScrollController _scrollController = ScrollController();
-
-  /// 是否正在下拉（列表在顶部 + 用户继续向下拖）
   bool _isPullingDown = false;
 
   @override
@@ -59,14 +37,6 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     super.dispose();
   }
 
-  /// 在指定时间内把 `_totalDy` 从 [from] 平滑动画到 [to]。
-  ///
-  /// 返回的Future在动画正常完成且未被新动画打断时为 `true`。
-  ///
-  /// [from] 起始位置
-  /// [to] 目标位置
-  /// [duration] 动画时长
-  /// [curve] 动画曲线，默认为线性
   Future<bool> _animateTo({
     required double from,
     required double to,
@@ -99,17 +69,11 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     return _animToken == myToken && mounted;
   }
 
-  /// 立即丢弃正在运行的"回位 / 关闭"动画。
-  ///
-  /// 通过递增动画令牌并重置动画控制器来取消当前动画。
   void _cancelAnimation() {
     _animToken++;
     _animationController.reset();
   }
 
-  /// 用户触发的正式关闭流程：直接让页面向下飞出，然后pop。
-  ///
-  /// 不再在这个路径上做任何NFC操作——"下滑即返回"。
   Future<void> _closePage() async {
     if (_isClosing) return;
     final screenHeight = MediaQuery.sizeOf(context).height;
@@ -125,9 +89,6 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     if (mounted) Navigator.of(context).pop();
   }
 
-  /// 系统返回键 / 右上角关闭按钮：统一走"动画 + pop"，避免直接pop时没有过渡。
-  ///
-  /// 返回 `true` 表示已处理返回操作，`false` 表示未处理。
   Future<bool> _handleSystemPop() async {
     if (_isClosing) return false;
     setState(() => _isClosing = true);
@@ -142,34 +103,48 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     return true;
   }
 
-  /// 拖动进度（0-1）
-  ///
-  /// 根据当前拖动距离与关闭阈值的比例计算
   double get _dragProgress =>
       (_totalDy / kDetailPageCloseThreshold).clamp(0.0, 1.0);
 
-  /// 当前缩放比例
-  ///
-  /// 随着拖动距离增加而减小
   double get _currentScale =>
       1.0 - (_dragProgress * kDetailPageDragScaleChange);
 
-  /// 当前透明度
-  ///
-  /// 随着拖动距离增加而降低
   double get _currentOpacity =>
       1.0 - (_dragProgress * kDetailPageDragOpacityChange);
 
-  /// 构建详情页内容区域
-  ///
-  /// 包含关闭按钮、NFC提示图标和标题
+  /// 构建详情页内容区域：底层全屏背景图 + 上层安全区交互内容
   Widget _buildDetailContent() {
-    return SafeArea(
-      child: Stack(children: [_buildCloseButton(), _buildMainContent()]),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _buildBackgroundImage(),
+        SafeArea(
+          child: Stack(children: [_buildCloseButton(), _buildMainContent()]),
+        ),
+      ],
     );
   }
 
-  /// 构建右上角关闭按钮
+  /// 构建背景图片及保护性半透明遮罩
+  Widget _buildBackgroundImage() {
+    if (widget.item.imageUrl.isEmpty) {
+      return Container(color: widget.item.color);
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.file(
+          File(widget.item.imageUrl),
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => Container(color: widget.item.color),
+        ),
+        // 半透明遮罩，保证上层白色字体在任意图片背景下的对比度
+        Container(color: Colors.black.withValues(alpha: 0.35)),
+      ],
+    );
+  }
+
   Widget _buildCloseButton() {
     return Positioned(
       top: 0,
@@ -181,14 +156,11 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     );
   }
 
-  /// 构建主要内容区域
-  ///
-  /// 包含NFC提示和卡片详细信息
   Widget _buildMainContent() {
     return ListView(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       children: [
         _buildNfcHint(),
         const SizedBox(height: 32),
@@ -197,11 +169,6 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     );
   }
 
-  /// 构建NFC提示区域
-  ///
-  /// 根据页面状态显示不同的提示内容：
-  /// - 正常状态：显示下滑返回提示
-  /// - 关闭状态：显示正在关闭提示
   Widget _buildNfcHint() {
     return Center(
       child: Column(
@@ -222,26 +189,21 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     );
   }
 
-  /// 构建标题区域
-  ///
-  /// 包含卡片标题
+  /// 构建标题区域：居中对齐
   Widget _buildTitleSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          widget.item.title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-          ),
+    return Center(
+      child: Text(
+        widget.item.title,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 32,
+          fontWeight: FontWeight.bold,
         ),
-      ],
+      ),
     );
   }
 
-  /// 判断 ListView 是否在顶部（不能继续向上滚动）
   bool get _isAtTop {
     if (!_scrollController.hasClients) return true;
     return _scrollController.offset <= 0;
@@ -255,6 +217,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
         if (!didPop) _handleSystemPop();
       },
       child: Scaffold(
+        // 底层兜底色维持卡片主色
         backgroundColor: widget.item.color,
         body: Listener(
           onPointerDown: (_) {
