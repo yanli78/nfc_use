@@ -426,7 +426,7 @@ class _CardSortPageState extends State<CardSortPage> {
 
                     itemCount: _items.length,
 
-                    onReorder: _onReorder,
+                    onReorderItem: _onReorder,
 
                     buildDefaultDragHandles: false,
 

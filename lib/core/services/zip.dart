@@ -77,7 +77,9 @@ class ZipService {
         final parts = basePath.split(Platform.pathSeparator);
         final androidIndex = parts.indexOf('Android');
         if (androidIndex > 0) {
-          basePath = parts.sublist(0, androidIndex).join(Platform.pathSeparator);
+          basePath = parts
+              .sublist(0, androidIndex)
+              .join(Platform.pathSeparator);
         }
       }
 
@@ -298,7 +300,6 @@ class ZipService {
         onComplete?.call(result);
         return result;
       }
-
     } catch (error) {
       final result = ExtractResult(
         success: false,
@@ -359,7 +360,10 @@ class ZipService {
   /// 验证解压结果的完整性
   ///
   /// 检查解压目录中文件数量是否与预期一致。
-  Future<ExtractResult> _verifyExtraction(String destDirPath, int expectedCount) async {
+  Future<ExtractResult> _verifyExtraction(
+    String destDirPath,
+    int expectedCount,
+  ) async {
     try {
       final dir = Directory(destDirPath);
       if (!await dir.exists()) {
@@ -585,14 +589,11 @@ class ZipException implements Exception {
   final Object? error;
 
   /// 创建ZIP异常
-  const ZipException({
-    required this.type,
-    required this.message,
-    this.error,
-  });
+  const ZipException({required this.type, required this.message, this.error});
 
   @override
-  String toString() => 'ZipException($type): $message${error != null ? '\n$error' : ''}';
+  String toString() =>
+      'ZipException($type): $message${error != null ? '\n$error' : ''}';
 }
 
 /// 解压结果类
@@ -737,10 +738,17 @@ class FileInfo {
   });
 
   /// 获取文件大小的可读字符串
+  /// 获取文件大小的可读字符串
   String get readableSize {
-    if (size < 1024) return '$size B';
-    if (size < 1024 * 1024) return '${(size / 1024).toStringAsFixed(1)} KB';
-    if (size < 1024 * 1024 * 1024) return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (size < 1024) {
+      return '$size B';
+    }
+    if (size < 1024 * 1024) {
+      return '${(size / 1024).toStringAsFixed(1)} KB';
+    }
+    if (size < 1024 * 1024 * 1024) {
+      return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
     return '${(size / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 

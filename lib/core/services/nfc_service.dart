@@ -414,7 +414,7 @@ class NfcService {
   /// 返回 `true` 表示本应用的 HCE 服务已被设为默认（AID 路由正确）。
   Future<bool> isDefaultService() async {
     try {
-      return isDefaultPaymentApp();
+      return await isDefaultPaymentApp();
     } catch (_) {
       return false;
     }

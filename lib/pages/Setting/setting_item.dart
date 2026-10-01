@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 /// 设置页面通用组件库
@@ -102,10 +101,7 @@ class BaseTile extends StatelessWidget {
               padding: const EdgeInsets.only(top: 2),
               child: Text(
                 subtitle!,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ),
         ],
@@ -363,10 +359,7 @@ class SettingGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildGroupTitle(),
-        _buildGroupContent(),
-      ],
+      children: [_buildGroupTitle(), _buildGroupContent()],
     );
   }
 
@@ -481,8 +474,10 @@ class FieldTile extends StatelessWidget {
                 isDense: true,
                 hintText: hintText,
                 hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide(color: Colors.grey.shade300),
@@ -493,7 +488,10 @@ class FieldTile extends StatelessWidget {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF00966A), width: 1.5),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF00966A),
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
